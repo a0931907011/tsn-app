@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>泰膳娘 - 出勤考核紅綠燈</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; }
+      ::-webkit-scrollbar { display: none !important; }
+      .no-print { display: none !important; }
+      .print-shadow-none { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useMemo } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { initializeApp } from 'firebase/app';
+    import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+    import { 
+      Calendar, Clock, CheckCircle2, ChevronLeft, ChevronRight, 
+      UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download
+    } from 'lucide-react';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCitzdvwC1VEjXq_-ypAVhkeo9aWwuTfQI",
+      authDomain: "tsn-shife.firebaseapp.com",
+      projectId: "tsn-shife",
+      storageBucket: "tsn-shife.firebasestorage.app",
+      messagingSenderId: "453632681741",
+      appId: "1:453632681741:web:13f163e924e34f2fa2b244"
+    };
+    
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = 'tsn-official-app'; 
+
+    const TrafficLight = ({ status, diff }) => {
+      const tooltip = status === 'none' ? '尚未打卡' : status === 'green' ? '準時或提早' : `遲到 ${diff} 分鐘`;
+      return (
+        <div className="inline-flex gap-1.5 bg-slate-800 p-2 rounded-full border-4 border-slate-700 shadow-inner" title={tooltip}>
+          <div className={`w-5 h-5 rounded-full transition-all duration-300 ${status === 'red' ? 'bg-red-500 shadow-[0_0_12px_#ef4444]' : 'bg-red-950 opacity-30'}`}></div>
+          <div className={`w-5 h-5 rounded-full transition-all duration-300 ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_12px_#facc15] animate-pulse' : 'bg-yellow-950 opacity-30'}`}></div>
+          <div className={`w-5 h-5 rounded-full transition-all duration-300 ${status === 'green' ? 'bg-green-500 shadow-[0_0_12px_#22c55e]' : 'bg-green-950 opacity-30'}`}></div>
+        </div>
+      );
+    };
+
+    export default function App() {
+      const [user, setUser] = useState(null);
+      const [ready, setReady] = useState(false);
+      const [role, setRole] = useState('none');
+      const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+
+      useEffect(() => {
+        signInAnonymously(auth).catch(err => console.error(err));
+        return onAuthStateChanged(auth, (u) => { 
+          if(u) { setUser(u); setReady(true); } 
+        });
+      }, []);
+
+      const handleLogin = async () => {
+        setIsLoadingAuth(true);
+        const pwd = document.getElementById('pwd-input').value;
+        let adminPwd = "tsn168";
+        try {
+          const authDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth'));
+          if (authDoc.exists() && authDoc.data().admin) adminPwd = authDoc.data().admin;
+        } catch (e) { console.error(e); }
+        
+        if (pwd === adminPwd) setRole('admin');
+        else alert("密碼錯誤！請輸入最高主管權限密碼。");
+        setIsLoadingAuth(false);
+      };
+
+      if (!ready) return <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-bold animate-pulse"><span className="text-3xl tracking-widest mb-4">泰膳娘金庫連線中...</span></div>;
+
+      if (role === 'none') return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans">
+          <div className="bg-white rounded-[3rem] p-12 w-full max-w-md text-center shadow-2xl border-4 border-teal-50 animate-in zoom-in-95">
+            <Lock className="mx-auto text-teal-600 mb-6" size={64} />
+            <h1 className="text-3xl font-black mb-2 text-slate-800">打卡考核系統</h1>
+            <p className="text-slate-500 mb-8 font-bold">人資與店長專用入口</p>
+            <input id="pwd-input" type="password" autoFocus placeholder="請輸入主管通行密碼" className="w-full border-4 border-slate-100 p-5 rounded-3xl text-center text-3xl mb-6 focus:border-teal-500 outline-none font-black shadow-inner bg-slate-50" onKeyDown={(e) => { if (e.key === 'Enter') handleLogin(); }} />
+            <button onClick={handleLogin} disabled={isLoadingAuth} className="w-full bg-teal-600 text-white py-6 rounded-3xl font-black text-2xl hover:bg-teal-700 transition-colors shadow-2xl active:scale-95 flex justify-center items-center gap-3"><Lock size={28} /> {isLoadingAuth ? '驗證中...' : '解鎖登入'}</button>
+          </div>
+        </div>
+      );
+
+      return <AttendanceApp user={user} onLogout={() => setRole('none')} />;
+    }
+
+    function AttendanceApp({ user, onLogout }) {
+      const [employees, setEmployees] = useState([]);
+      const [shifts, setShifts] = useState([]);
+      const [attendances, setAttendances] = useState({});
+      const [date, setDate] = useState(new Date(2026, 3, 16));
+      const [toast, setToast] = useState('');
+      const [view, setView] = useState('daily'); 
+      const [filterName, setFilterName] = useState(''); 
+      const base = localStorage.getItem('tsn_base') || '0931907011';
+
+      useEffect(() => {
+        const p = (n) => collection(db, 'artifacts', appId, 'public', 'data', n);
+        const u1 = onSnapshot(p('employees'), s => setEmployees(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const u2 = onSnapshot(p('shifts'), s => setShifts(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const u3 = onSnapshot(p('attendances'), s => {
+          const acc = {};
+          s.docs.forEach(d => { acc[d.id] = d.data(); });
+          setAttendances(acc);
+        });
+        return () => { u1(); u2(); u3(); };
+      }, []);
+
+      const getDayKey = (d) => `${d.getFullYear()}_${d.getMonth() + 1}_${d.getDate()}`;
+      const currentDayKey = getDayKey(date);
+
+      const calculateStatus = (scheduled, actual) => {
+        if (!scheduled || !actual) return { status: 'none', diff: 0 };
+        const [sH, sM] = scheduled.split(':').map(Number);
+        const [aH, aM] = actual.split(':').map(Number);
+        const diffMinutes = (aH * 60 + aM) - (sH * 60 + sM);
+        
+        if (diffMinutes <= 0) return { status: 'green', diff: diffMinutes }; 
+        if (diffMinutes >= 1 && diffMinutes <= 4) return { status: 'yellow', diff: diffMinutes }; 
+        return { status: 'red', diff: diffMinutes }; 
+      };
+
+      const todayRecords = useMemo(() => {
+        const records = [];
+        const todayShifts = shifts.filter(s => s.key === currentDayKey && s.leaveType === 'work' && s.base === base);
+        todayShifts.forEach(shift => {
+          const emp = employees.find(e => e.id === shift.empId);
+          if (!emp) return;
+          [1, 2, 3].forEach(n => {
+            const start = shift[`shift${n}Start`];
+            const loc = shift[`shift${n}Loc`];
+            if (start && loc) {
+              const recordId = `${shift.empId}_${currentDayKey}_shift${n}`;
+              const savedData = attendances[recordId] || {};
+              const actualTime = savedData.actualTime || '';
+              const { status, diff } = calculateStatus(start, actualTime);
+              records.push({
+                id: recordId, empId: emp.id, name: emp.name, role: emp.role, loc: loc,
+                segmentName: `第 ${n} 段`, scheduledTime: start, actualTime: actualTime, status, diff
+              });
+            }
+          });
+        });
+        return records.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+      }, [shifts, employees, attendances, currentDayKey, base]);
+
+      const weekDates = useMemo(() => {
+        const d = date.getDay() === 0 ? 7 : date.getDay(); 
+        return Array.from({length: 7}, (_, i) => { const x = new Date(date); x.setDate(x.getDate() - d + i + 1); return x; });
+      }, [date]);
+
+      const handleTimeChange = async (recordId, newTime, empId, dayKey, scheduledTime) => {
+        const { status, diff } = calculateStatus(scheduledTime, newTime);
+        const dataToSave = { empId, key: dayKey, scheduledTime, actualTime: newTime, status, delayMinutes: diff, base };
+        try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendances', recordId), dataToSave);
+          showToast(`✅ 已自動儲存打卡紀錄`);
+        } catch (e) { console.error("儲存失敗", e); }
+      };
+
+      const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2000); };
+
+      // 新增：下載打卡備份
+      const downloadBackup = () => {
+        const data = { employees, shifts, attendances, backupDate: new Date().toISOString(), type: 'attendance_backup' };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url;
+        a.download = `泰膳娘_打卡紀錄備份_${currentDayKey}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        showToast("📥 備份下載完成！");
+      };
+
+      const exportToExcel = () => {
+        let csvContent = '\uFEFF'; 
+        csvContent += "日期,星期,員工姓名,據點,排班時段,預定上班,實際打卡,狀態,遲到分鐘數\n";
+        const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
+        employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).forEach(emp => {
+          weekDates.forEach(d => {
+            const dKey = getDayKey(d);
+            const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
+            if (shift) {
+              const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+              const dayStr = `星期${weekMap[d.getDay()]}`;
+              [1, 2, 3].forEach(n => {
+                const start = shift[`shift${n}Start`];
+                const loc = shift[`shift${n}Loc`];
+                if (start && loc) {
+                  const recordId = `${emp.id}_${dKey}_shift${n}`;
+                  const att = attendances[recordId] || {};
+                  const act = att.actualTime || '未打卡';
+                  const st = att.status === 'green' ? '準時' : att.status === 'yellow' ? '輕微遲到' : att.status === 'red' ? '嚴重遲到' : '無紀錄';
+                  const diff = att.status === 'none' || !att.status ? '' : att.delayMinutes;
+                  csvContent += `${dateStr},${dayStr},${emp.name},${loc},第${n}段,${start},${act},${st},${diff}\n`;
+                }
+              });
+            }
+          });
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `泰膳娘_週考核表_${weekDates[0].getMonth()+1}月.csv`);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col font-black selection:bg-teal-200">
+          {toast && (
+            <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] bg-teal-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden">
+              <span className="tracking-widest text-lg">{toast}</span>
+            </div>
+          )}
+
+          <nav className="bg-white p-6 shadow-md flex flex-col md:flex-row justify-between items-center sticky top-0 z-40 border-b-4 border-teal-600 print:hidden gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-teal-600 rounded-2xl text-white shadow-lg"><UserCheck size={32}/></div>
+              <div>
+                <h1 className="text-3xl font-black text-slate-800">打卡與考核系統</h1>
+                <div className="text-sm text-slate-500 mt-1">店鋪據點: {base}</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
+                <button onClick={() => setView('daily')} className={`px-6 py-2.5 rounded-lg text-lg transition-all ${view==='daily'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📝 每日輸入</button>
+                <button onClick={() => setView('weekly')} className={`px-6 py-2.5 rounded-lg text-lg transition-all ${view==='weekly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📊 週考核總表</button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronLeft size={24}/></button>
+                <div className="relative flex items-center gap-2 px-4 cursor-pointer text-teal-700 hover:text-teal-600 bg-white py-1 rounded-lg shadow-sm">
+                  <Calendar size={20} />
+                  <span className="text-xl font-black">{date.getFullYear()}/{date.getMonth() + 1}/{date.getDate()}</span>
+                  <input type="date" className="absolute inset-0 opacity-0 cursor-pointer scale-[2]" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
+                </div>
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronRight size={24}/></button>
+                
+                {/* 新增備份按鈕 */}
+                <button onClick={downloadBackup} className="ml-2 p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold" title="下載資料備份"><Download size={20}/></button>
+                <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold" title="登出系統"><LogOut size={20}/></button>
+              </div>
+            </div>
+          </nav>
+
+          <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-8 print:p-0">
+            {view === 'daily' && (
+              <div className="bg-white rounded-[3rem] shadow-2xl border-2 border-slate-100 overflow-hidden animate-in fade-in zoom-in-95">
+                <div className="bg-slate-800 text-white p-6 flex justify-between items-center">
+                  <h2 className="text-2xl font-black flex items-center gap-3"><Edit3 className="text-teal-400"/> 實際打卡輸入區 (雲端自動即時存檔)</h2>
+                  <div className="flex gap-4 text-sm font-bold bg-slate-900 px-6 py-3 rounded-full shadow-inner border border-slate-700">
+                    <span className="flex items-center gap-2 text-green-400"><div className="w-3 h-3 bg-green-500 rounded-full"></div> 準時/提早</span>
+                    <span className="flex items-center gap-2 text-yellow-400"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div> 遲到 1~4分</span>
+                    <span className="flex items-center gap-2 text-red-400"><div className="w-3 h-3 bg-red-500 rounded-full"></div> 遲到 5分以上</span>
+                  </div>
+                </div>
+
+                {todayRecords.length === 0 ? (
+                  <div className="p-20 text-center text-slate-400 text-2xl font-black flex flex-col items-center gap-4">
+                    <Calendar size={64} className="opacity-20" />
+                    這天沒有人排班喔！
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-center">
+                      <thead className="bg-slate-50 text-slate-500 text-lg border-b-2 border-slate-200">
+                        <tr>
+                          <th className="py-6 px-4">人員</th>
+                          <th className="py-6 px-4">地點/班別</th>
+                          <th className="py-6 px-4 text-teal-700">排班時間 (自動)</th>
+                          <th className="py-6 px-4 text-orange-600 bg-orange-50 border-x border-orange-100 w-64">實際打卡 (請輸入)</th>
+                          <th className="py-6 px-4">系統判定</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {todayRecords.map((record) => (
+                          <tr key={record.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-6 px-4"><div className="text-2xl font-black text-slate-800">{record.name}</div><div className="text-sm text-slate-400 mt-1">{record.role}</div></td>
+                            <td className="py-6 px-4"><span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg text-sm">{record.loc}</span><div className="text-slate-500 mt-2 text-sm">{record.segmentName}</div></td>
+                            <td className="py-6 px-4"><div className="text-4xl font-mono text-teal-700 font-black tracking-widest">{record.scheduledTime}</div></td>
+                            <td className="py-6 px-4 bg-orange-50/30 border-x border-orange-100/50">
+                              <input type="time" value={record.actualTime} onChange={(e) => handleTimeChange(record.id, e.target.value, record.empId, currentDayKey, record.scheduledTime)} className="w-full text-center text-4xl font-mono font-black border-4 border-slate-200 p-4 rounded-2xl focus:border-orange-500 outline-none bg-white text-slate-800 shadow-inner transition-all hover:border-orange-300"/>
+                            </td>
+                            <td className="py-6 px-4 flex justify-center"><TrafficLight status={record.status} diff={record.diff} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {view === 'weekly' && (
+              <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10">
+                <div className="bg-slate-50 print:bg-white p-6 border-b-2 border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div><h2 className="text-3xl font-black flex items-center gap-3 text-slate-800"><BarChart3 className="text-teal-600"/> 員工出勤週考核表</h2><p className="text-slate-500 mt-2 font-bold">{weekDates[0].getMonth()+1}/{weekDates[0].getDate()} (一) ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()} (日)</p></div>
+                  <div className="flex items-center gap-4 flex-wrap print:hidden">
+                    <div className="relative">
+                      <input type="text" placeholder="🔍 輸入姓名篩選..." value={filterName} onChange={e => setFilterName(e.target.value)} className="border-4 border-slate-200 px-5 py-3 rounded-2xl font-black focus:border-teal-500 outline-none w-56 shadow-inner text-lg"/>
+                      {filterName && <button onClick={() => setFilterName('')} className="absolute right-4 top-4 text-slate-400 hover:text-red-500"><XCircle size={20}/></button>}
+                    </div>
+                    <button onClick={exportToExcel} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出 Excel</button>
+                    <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-orange-200"><Printer /> 列印 PDF</button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto print:overflow-visible p-4 print:p-0">
+                  <table className="w-full text-center border-collapse text-sm print:text-xs">
+                    <thead className="bg-slate-800 text-white print:bg-slate-100 print:text-black">
+                      <tr>
+                        <th className="py-4 px-2 w-24 border border-slate-700 print:border-gray-300">員工</th>
+                        {weekDates.map((d, i) => <th key={i} className="py-4 px-2 border border-slate-700 print:border-gray-300 w-32"><div className="text-lg">{d.getDate()}</div><div className="text-xs opacity-70 print:opacity-100 font-normal">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div></th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).map(emp => {
+                        const hasShiftThisWeek = weekDates.some(d => shifts.some(s => s.empId === emp.id && s.key === getDayKey(d) && s.leaveType === 'work'));
+                        if (!hasShiftThisWeek) return null;
+                        return (
+                          <tr key={emp.id} className="border-b border-slate-200 hover:bg-slate-50">
+                            <td className="py-4 px-2 border border-slate-200 font-black text-lg bg-slate-50 print:bg-transparent">{emp.name}</td>
+                            {weekDates.map((d, i) => {
+                              const dKey = getDayKey(d);
+                              const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
+                              if (!shift) return <td key={i} className="border border-slate-200 bg-slate-50/50 print:bg-transparent text-slate-300">休</td>;
+                              const records = [1, 2, 3].map(n => {
+                                const start = shift[`shift${n}Start`];
+                                if (!start) return null;
+                                const att = attendances[`${emp.id}_${dKey}_shift${n}`] || {};
+                                return { start, actual: att.actualTime, status: att.status, diff: att.delayMinutes };
+                              }).filter(Boolean);
+                              return (
+                                <td key={i} className="border border-slate-200 p-2 align-top">
+                                  {records.map((r, idx) => (
+                                    <div key={idx} className="mb-2 last:mb-0 bg-white border border-slate-200 rounded-xl p-2 shadow-sm print:shadow-none flex flex-col items-center gap-1.5"><div className="text-xs font-bold text-slate-500">排 {r.start}</div><div className="text-xs font-black text-orange-600">打 {r.actual || '--:--'}</div><TrafficLight status={r.status || 'none'} diff={r.diff} /></div>
+                                  ))}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
