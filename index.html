@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>泰膳娘智慧排班系統 - 專屬正式版</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    window.addEventListener('error', function(event) {
+      console.error("系統錯誤:", event.error);
+    });
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
+      }
+    }
+  </script>
+
+  <style>
+    @media print {
+      @page { size: A4 landscape; margin: 6mm; }
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; }
+      ::-webkit-scrollbar { display: none !important; }
+      .no-print { display: none !important; }
+    }
+    .gantt-table th, .gantt-table td { border: 1px solid #e5e7eb; }
+    .bg-stripes { background-image: repeating-linear-gradient(45deg, #f8fafc 0, #f8fafc 10px, #f1f5f9 10px, #f1f5f9 20px); }
+    .calendar-cell-scroll::-webkit-scrollbar { width: 4px; }
+    .calendar-cell-scroll::-webkit-scrollbar-track { background: transparent; }
+    .calendar-cell-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useMemo, useEffect, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { initializeApp } from 'firebase/app';
+    import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from 'firebase/firestore';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+    import { 
+      Calendar, Users, Clock, CheckCircle2, ChevronLeft, ChevronRight, 
+      X, Edit3, UserCheck, Shield, Lock, Save, Tag, Search,
+      Settings, Trash2, Download, Upload, Users2, ShieldCheck, LogOut, Printer, Zap, AlertCircle, Coffee,
+      FileSpreadsheet
+    } from 'lucide-react';
+
+    // --- 🔐 1. Firebase 初始化 (鑲嵌雅惠專屬金鑰) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCitzdvwC1VEjXq_-ypAVhkeo9aWwuTfQI",
+      authDomain: "tsn-shife.firebaseapp.com",
+      projectId: "tsn-shife",
+      storageBucket: "tsn-shife.firebasestorage.app",
+      messagingSenderId: "453632681741",
+      appId: "1:453632681741:web:13f163e924e34f2fa2b244"
+    };
+    
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const appId = 'tsn-official-app'; // 正式版房間代號
+    
+    const PWD_ADMIN = "tsn168";
+    const PWD_STAFF = "40859555";
+
+    // 工具函數：取得日期索引與時間轉換
+    const getDayKey = (d) => {
+      const dateObj = (d instanceof Date) ? d : new Date(d);
+      return `${dateObj.getFullYear()}_${dateObj.getMonth() + 1}_${dateObj.getDate()}`;
+    };
+    const timeToDecimal = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h + (m === 30 ? 0.5 : 0); };
+    const decimalToStr = (d) => { if (d === null) return ''; return String(d); };
+
+    // --- 🏠 2. 系統入口層 (登入與權限管理) ---
+    export default function App() {
+      const [user, setUser] = useState(null);
+      const [ready, setReady] = useState(false);
+      const [role, setRole] = useState('none'); 
+      const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+      const [base, setBase] = useState(() => localStorage.getItem('tsn_base') || '0931907011');
+
+      useEffect(() => {
+        const init = async () => {
+          try {
+            await signInAnonymously(auth);
+          } catch (err) { console.error("Firebase 連線錯誤:", err); }
+        };
+        init();
+        return onAuthStateChanged(auth, (u) => { 
+          if(u) { setUser(u); setReady(true); } 
+        });
+      }, []);
+
+      const handleLogin = () => {
+        setIsLoadingAuth(true);
+        const pwd = document.getElementById('pwd-input').value;
+        if (pwd === PWD_ADMIN) setRole('admin');
+        else if (pwd === PWD_STAFF) setRole('partner');
+        else alert("密碼錯誤！請重新輸入。");
+        setIsLoadingAuth(false);
+      };
+
+      if (!ready) return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white font-bold animate-pulse">
+          <span className="text-3xl tracking-widest mb-4">系統專屬保險箱連線中...</span>
+          <span className="text-slate-400">請稍候</span>
+        </div>
+      );
+
+      if (role === 'none') return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans">
+          <div className="bg-white rounded-[3rem] p-12 w-full max-w-md text-center shadow-2xl border-4 border-white/10 animate-in zoom-in-95">
+            <Lock className="mx-auto text-orange-600 mb-6" size={64} />
+            <h1 className="text-4xl font-black mb-8 text-slate-800">泰膳娘入口</h1>
+            <input 
+              id="pwd-input" type="password" autoFocus placeholder="請輸入通行密碼"
+              className="w-full border-4 border-slate-100 p-5 rounded-3xl text-center text-4xl mb-6 focus:border-orange-500 outline-none font-black shadow-inner bg-slate-50"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleLogin();
+              }}
+            />
+            <button 
+              onClick={handleLogin}
+              disabled={isLoadingAuth}
+              className="w-full bg-orange-600 text-white py-6 rounded-3xl font-black text-2xl hover:bg-orange-700 transition-colors shadow-2xl active:scale-95 flex justify-center items-center gap-3"
+            >
+              <Lock size={28} /> {isLoadingAuth ? '驗證中...' : '解鎖進入系統'}
+            </button>
+          </div>
+        </div>
+      );
+
+      return <MainSystem user={user} role={role} base={base} onLogout={() => setRole('none')} onUpdateBase={setBase} />;
+    }
+
+    // --- 🚀 3. 核心主系統 ---
+    function MainSystem({ user, role, base, onLogout, onUpdateBase }) {
+      const [employees, setEmployees] = useState([]);
+      const [shifts, setShifts] = useState([]);
+      const [events, setEvents] = useState([]);
+      const [date, setDate] = useState(new Date(2026, 3, 16)); 
+      const [view, setView] = useState('daily'); // 預設跳轉到甘特圖
+      const [toast, setToast] = useState(false);
+      
+      const fileInputRef = useRef(null); 
+      const dateInputRef = useRef(null); 
+
+      const [eEvent, setEEvent] = useState(null);
+      const [mHR, setMHR] = useState(false);
+      const [hrForm, setHrForm] = useState({ id: null, name: '', type: '月薪', role: '主廚' }); 
+      const [mBackup, setMBackup] = useState(false);
+      const [mSettings, setMSettings] = useState(false);
+      const [pwdForm, setPwdForm] = useState({ admin: '', staff: '' });
+      const [eShift, setEShift] = useState(null);
+      const [showPrintModal, setShowPrintModal] = useState(false);
+
+      const isAdmin = role === 'admin';
+
+      // 🔍 篩選器狀態
+      const [locFilter, setLocFilter] = useState('全部');
+      const [nameFilter, setNameFilter] = useState(''); 
+
+      useEffect(() => {
+        if (!isAdmin && locFilter === '全部') setLocFilter('麻豆');
+      }, [isAdmin, locFilter]);
+
+      // 🎨 顏色與文字換行引擎
+      const renderEvents = (txt) => {
+        if (!txt) return null;
+        return String(txt).split(/[;；]/).map((str, idx) => {
+          const t = str.trim();
+          if (!t) return null;
+          
+          if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-red-600 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-red-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-green-700 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-green-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-purple-700 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-purple-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-orange-600 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-orange-100 print:border-none">📌 {String(t)}</div>;
+          
+          return (
+            <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] bg-yellow-100 text-slate-800 print:bg-transparent print:border-none border border-yellow-200 px-3 print:px-0 py-1.5 print:py-0 rounded-lg shadow-sm print:shadow-none mb-1.5 print:mb-0.5 font-bold print:leading-tight">
+              📌 {String(t)}
+            </div>
+          );
+        });
+      };
+
+      // ⚡ 快捷排班引擎
+      const applyShiftTemplate = (type) => {
+        let updates = {};
+        const defLoc1 = eShift.shift1Loc || '麻豆';
+        const defLoc2 = eShift.shift2Loc || '麻豆';
+        
+        if (type === 'full') {
+          updates = { shift1Start: '09:30', shift1End: '13:30', shift1Loc: defLoc1, shift2Start: '16:30', shift2End: '20:30', shift2Loc: defLoc2, shift3Start: '', shift3End: '', shift3Loc: '麻豆' };
+        } else if (type === 'morning') {
+          updates = { shift1Start: '09:30', shift1End: '13:30', shift1Loc: defLoc1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
+        } else if (type === 'evening') {
+          updates = { shift1Start: '16:30', shift1End: '20:30', shift1Loc: defLoc1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
+        } else if (type === 'pt_a') {
+          updates = { shift1Start: '11:00', shift1End: '14:00', shift1Loc: defLoc1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
+        } else if (type === 'pt_b') {
+          updates = { shift1Start: '17:00', shift1End: '21:00', shift1Loc: defLoc1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
+        } else if (type === 'clear') {
+          updates = { shift1Start: '', shift1End: '', shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
+        }
+        setEShift(prev => ({ ...prev, ...updates }));
+      };
+
+      // 💾 資料讀取
+      useEffect(() => {
+        if (!user) return;
+        const p = (n) => collection(db, 'artifacts', appId, 'public', 'data', n);
+        
+        const unsubEmp = onSnapshot(p('employees'), s => setEmployees(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("Emp Error", e));
+        const unsubShifts = onSnapshot(p('shifts'), s => setShifts(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("Shift Error", e));
+        const unsubEvents = onSnapshot(p('events'), s => setEvents(s.docs.map(d => ({id: d.id, ...d.data()}))), e => console.error("Event Error", e));
+        
+        return () => { unsubEmp(); unsubShifts(); unsubEvents(); };
+      }, [user]);
+
+      const fEmployees = useMemo(() => employees.filter(e => e.base === base || !e.base), [employees, base]);
+      const fShifts = useMemo(() => shifts.filter(s => s.base === base || !s.base), [shifts, base]);
+      const fEvents = useMemo(() => events.filter(v => v.base === base || !v.base), [events, base]);
+
+      const triggerToast = () => { setToast(true); setTimeout(() => setToast(false), 2000); };
+
+      const handlePrint = () => { setShowPrintModal(true); };
+
+      const handleExportExcel = () => {
+        let csvContent = '\uFEFF'; 
+        csvContent += "日期,星期,姓名,崗位,出勤狀態,地點段一,時間段一,地點段二,時間段二,地點段三,時間段三\n";
+        
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const days = new Date(year, month + 1, 0).getDate();
+        const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
+
+        for (let d = 1; d <= days; d++) {
+          const currentD = new Date(year, month, d);
+          const key = getDayKey(currentD);
+          const dayOfWeek = weekMap[currentD.getDay()];
+          
+          fEmployees.forEach(emp => {
+            const s = fShifts.find(sh => sh.empId === emp.id && sh.key === key);
+            if (s) {
+              const dateStr = `${year}/${month + 1}/${d}`;
+              let row = `${dateStr},${dayOfWeek},${emp.name},${emp.role},`;
+              
+              if (s.leaveType === 'work') {
+                row += `出勤,${s.shift1Loc||''},${s.shift1Start||''}-${s.shift1End||''},${s.shift2Loc||''},${s.shift2Start||''}-${s.shift2End||''},${s.shift3Loc||''},${s.shift3Start||''}-${s.shift3End||''}`;
+              } else {
+                const lvMap = { 'off': '休假', 'schedule_off': '排休', 'madou_off': '麻豆店休', 'liujia_off': '六甲店休', 'annual': '特休', 'sick': '病假', 'personal': '事假' };
+                row += `${lvMap[s.leaveType] || s.leaveType},,,,,,`;
+              }
+              csvContent += row + "\n";
+            }
+          });
+        }
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `泰膳娘_${year}年${month+1}月_排班總表.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const handleDownloadBackup = () => {
+        const data = { employees, shifts, events, baseCode: base, backupDate: new Date().toISOString() };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const d = new Date();
+        a.download = `泰膳娘排班備份_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      };
+
+      const handleUploadRestore = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const res = JSON.parse(e.target.result);
+            if (!res || !res.employees) throw new Error("無效檔案");
+            
+            alert("⏳ 正在將資料寫入專屬雲端，請稍候...");
+            
+            for (const emp of res.employees) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', emp.id), { ...emp, base: base });
+            for (const s of (res.shifts || [])) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shifts', s.id || `${s.empId}_${s.key}`), { ...s, base: base });
+            for (const v of (res.events || [])) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', v.id || `event_${v.key}`), { ...v, base: base });
+            
+            triggerToast(); setMBackup(false); 
+            if (res.shifts && res.shifts.length > 0) {
+              const parts = res.shifts[0].key.split('_');
+              if (parts.length === 3) setDate(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+            }
+            alert("✅ 備份資料已完美還原至專屬雲端保險箱！");
+          } catch (err) { 
+            console.error("還原錯誤:", err);
+            alert("❌ 檔案讀取失敗，請確認檔案格式"); 
+          }
+          event.target.value = null;
+        };
+        reader.readAsText(file);
+      };
+
+      const weekDates = useMemo(() => {
+        const d = date.getDay() === 0 ? 7 : date.getDay(); 
+        return Array.from({length: 7}, (_, i) => { const x = new Date(date); x.setDate(x.getDate() - d + i + 1); return x; });
+      }, [date]);
+
+      // 🌟 優化：依照「星期日」落在哪個月，來精準計算該月有幾週 (解決跨月第6週的問題)
+      const monthWeeks = useMemo(() => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const weeks = [];
+        
+        // 找出這個月的第一個星期日
+        let firstDay = new Date(year, month, 1);
+        let dayOfWeek = firstDay.getDay(); // 0 是星期日
+        let firstSundayDate = dayOfWeek === 0 ? 1 : 1 + (7 - dayOfWeek);
+        
+        let currentSunday = new Date(year, month, firstSundayDate);
+        
+        // 只要這個星期日還在當月內，就算作這個月的一週 (精準切分 4 或 5 週)
+        while (currentSunday.getMonth() === month) {
+          let monday = new Date(currentSunday);
+          monday.setDate(monday.getDate() - 6); // 從星期日回推 6 天找到星期一
+          weeks.push(monday);
+          currentSunday.setDate(currentSunday.getDate() + 7); // 換下一個星期日
+        }
+        return weeks;
+      }, [date.getFullYear(), date.getMonth()]);
+
+      // 💡 定義甘特圖 30格 時間軸 (07:00 ~ 21:30)
+      const timeSlots = Array.from({ length: 30 }, (_, i) => { 
+        const val = 7 + (i * 0.5); 
+        return { val: val, label: val % 1 === 0 ? String(val) : String(val) }; 
+      });
+
+      const getShiftObj = (empId, targetDate) => {
+        return fShifts.find(sh => sh.empId === empId && sh.key === getDayKey(targetDate));
+      };
+
+      const currentDayKey = getDayKey(date);
+      const currentDailyEvent = fEvents.find(v => v.key === currentDayKey);
+
+      const offEmployeesToday = useMemo(() => {
+        return fEmployees.map(emp => {
+          const s = getShiftObj(emp.id, date);
+          if (s && s.leaveType && s.leaveType !== 'work') return { name: emp.name, type: s.leaveType };
+          return null;
+        }).filter(Boolean);
+      }, [fEmployees, fShifts, date]);
+
+      return (
+        <div className="min-h-screen bg-slate-100 print:bg-white flex flex-col font-sans font-bold text-slate-800 select-none">
+          <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; } ::-webkit-scrollbar { display: none !important; } }`}</style>
+          {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><CheckCircle2 className="text-green-400" size={24} /> <span className="font-black tracking-widest text-lg">資料同步完成</span></div>}
+
+          {/* 導航列 */}
+          <nav className="max-w-[2400px] w-full mx-auto bg-white p-6 shadow-xl flex flex-col lg:flex-row justify-between items-center sticky top-0 z-40 border-b-2 print:hidden">
+            <div className="flex items-center gap-5">
+              <div className={`p-4 rounded-2xl text-white shadow-lg ${isAdmin ? 'bg-orange-600 rotate-6 shadow-orange-200' : 'bg-slate-800'}`}>
+                {isAdmin ? <ShieldCheck size={36}/> : <UserCheck size={36}/>}
+              </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-tighter">泰膳娘排班系統 <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded align-middle">正式雲端版</span></h1>
+                <div className="text-xs text-slate-400 font-bold uppercase mt-1">據點: {base} | {isAdmin ? '主管編輯' : '夥伴檢視'}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 flex-wrap mt-4 lg:mt-0">
+              <div className="flex bg-slate-100 p-2 rounded-xl items-center shadow-inner">
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronLeft size={24}/></button>
+                <span className="px-6 text-2xl font-black">{date.getFullYear()}年 {date.getMonth() + 1}月</span>
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronRight size={24}/></button>
+              </div>
+              <div className="flex bg-slate-100 p-2 rounded-xl shadow-inner font-black">
+                <button onClick={() => setView('monthly')} className={`px-8 py-3 rounded-lg text-md transition-all ${view==='monthly'?'bg-white text-orange-600 shadow-md':'text-slate-500'}`}>營運月曆(記事)</button>
+                <button onClick={() => setView('employee_matrix')} className={`px-8 py-3 rounded-lg text-md transition-all ${view==='employee_matrix'?'bg-white text-orange-600 shadow-md':'text-slate-500'}`}>員工週總表</button>
+                <button onClick={() => setView('daily')} className={`px-8 py-3 rounded-lg text-md transition-all ${view==='daily'?'bg-white text-orange-600 shadow-md':'text-slate-500'}`}>排班甘特圖</button>
+              </div>
+              
+              <div className="flex gap-2 ml-4">
+                <button onClick={handlePrint} className="px-6 py-4 bg-orange-100 border-2 border-orange-200 hover:bg-orange-200 text-orange-700 rounded-2xl shadow-sm transition-all flex items-center gap-2">
+                  <Printer size={24}/> <span className="font-black text-sm">匯出 A4</span>
+                </button>
+                <button onClick={handleExportExcel} className="px-6 py-4 bg-green-100 border-2 border-green-200 hover:bg-green-200 text-green-700 rounded-2xl shadow-sm transition-all flex items-center gap-2">
+                  <FileSpreadsheet size={24}/> <span className="font-black text-sm">匯出 Excel</span>
+                </button>
+
+                {isAdmin && (
+                  <>
+                    <button onClick={() => { setMHR(true); setHrForm({ id: null, name: '', type: '月薪', role: '主廚' }); }} className="p-4 bg-white border-2 border-slate-100 hover:bg-orange-50 text-orange-600 rounded-2xl shadow-sm transition-all" title="人資庫"><Users2 size={24}/></button>
+                    <button onClick={() => { setMBackup(true); }} className="p-4 bg-white border-2 border-slate-100 hover:bg-orange-50 text-orange-600 rounded-2xl shadow-sm transition-all" title="備份還原"><Shield size={24}/></button>
+                    <button onClick={() => setMSettings(true)} className="p-4 bg-white border-2 border-slate-100 hover:bg-orange-50 text-orange-600 rounded-2xl shadow-sm transition-all" title="系統設定"><Settings size={24}/></button>
+                  </>
+                )}
+                <button onClick={onLogout} className="p-4 bg-red-50 text-red-600 hover:bg-red-100 rounded-2xl ml-2 shadow-sm transition-all"><LogOut size={24}/></button>
+              </div>
+            </div>
+          </nav>
+
+          <main className="flex-1 w-full max-w-[2400px] mx-auto p-4 md:p-8 print:p-0 print:m-0 font-black">
+            
+            {/* 視圖 1: 月總表 (已移除排班人員，變為純記事月曆) */}
+            {view === 'monthly' && (
+              <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print:shadow-none border-4 print:border-2 border-slate-50 print:border-gray-200 overflow-hidden font-black">
+                <div className="hidden print:block text-center py-4 border-b-2 border-gray-200 bg-slate-50">
+                   <h2 className="text-2xl font-black">{date.getFullYear()}年 {date.getMonth() + 1}月 - 泰膳娘營運記事月曆 (據點: {base})</h2>
+                </div>
+                
+                <div className="overflow-x-auto print:overflow-visible">
+                  <div className="min-w-[1400px] lg:min-w-full print:min-w-full">
+                    <div className="grid grid-cols-7 bg-slate-900 print:bg-slate-100 print:border-t-2 print:border-l-2 print:border-gray-300 text-slate-400 print:text-slate-800 text-[12px] print:text-[14px] tracking-widest text-center py-6 print:py-3 uppercase font-black">
+                      {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(d => <div key={d} className="print:border-r-2 print:border-gray-300">{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 print:border-l-2 print:border-gray-300">
+                      {Array.from({ length: (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => <div key={i} className="min-h-[160px] print:min-h-0 print:h-auto bg-slate-50/50 print:bg-gray-50 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300" />)}
+                      {Array.from({ length: new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                        const day = i + 1; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), day));
+                        const ev = fEvents.find(v => v.key === k);
+                        return (
+                          <div key={day} onClick={() => { setDate(new Date(date.getFullYear(), date.getMonth(), day)); setView('daily'); }} className="min-h-[160px] print:min-h-0 print:h-[120px] p-6 print:p-4 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300 hover:bg-orange-50/40 transition-colors cursor-pointer relative group flex flex-col">
+                            <div className="flex justify-between items-start mb-4 print:mb-2">
+                              <span className="text-3xl print:text-2xl text-slate-400 print:text-black font-sans font-black">{day}</span>
+                              {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEEvent({ day, text: ev?.text || "" }); }} className="p-2 text-slate-100 group-hover:text-orange-500 transition-colors print:hidden"><Tag size={24}/></button>}
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              {renderEvents(ev?.text)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 視圖 2: 員工週總表 */}
+            {view === 'employee_matrix' && (
+              <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b bg-slate-50 print:hidden shrink-0 gap-4">
+                  <div className="text-xl font-black text-slate-700 flex items-center gap-2 shrink-0">
+                     <Calendar size={28} className="text-orange-600"/> 
+                     當週排班篩選
+                  </div>
+                  
+                  {/* 🌟 恢復並升級：第X週 快速切換按鈕區塊 🌟 */}
+                  <div className="flex items-center gap-2 bg-slate-200/50 p-1.5 rounded-2xl shadow-inner overflow-x-auto max-w-full">
+                    {monthWeeks.map((mon, index) => {
+                      const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                      const d2 = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate());
+                      const diff = (d1 - d2) / (1000 * 60 * 60 * 24);
+                      const isCurrentWeek = diff >= 0 && diff < 7;
+                      
+                      // 取得該週的星期日日期
+                      const endOfWeek = new Date(mon);
+                      endOfWeek.setDate(endOfWeek.getDate() + 6);
+                      
+                      return (
+                        <button 
+                          key={index}
+                          onClick={() => setDate(mon)}
+                          className={`px-4 py-2 rounded-xl text-sm font-black transition-all whitespace-nowrap flex items-center gap-1.5 ${isCurrentWeek ? 'bg-orange-500 text-white shadow-md scale-105' : 'bg-white text-slate-600 hover:text-orange-600 hover:bg-orange-50 shadow-sm'}`}
+                        >
+                          第 {index + 1} 週
+                          <span className={`text-[11px] ${isCurrentWeek ? 'text-orange-100' : 'text-slate-400'}`}>
+                            ({mon.getMonth()+1}/{mon.getDate()}~{endOfWeek.getMonth()+1}/{endOfWeek.getDate()})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap shrink-0">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="輸入姓名尋找..." 
+                        value={nameFilter}
+                        onChange={e => setNameFilter(e.target.value)}
+                        className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 md:w-48 pl-10"
+                      />
+                      <div className="absolute left-3 top-3.5 text-slate-400"><Search size={18}/></div>
+                    </div>
+                    <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors cursor-pointer">
+                      {isAdmin && <option value="全部">全據點</option>}
+                      <option value="麻豆">📍 麻豆</option><option value="六甲">📍 六甲</option><option value="茂迪">📍 茂迪</option><option value="餐車">🚚 餐車</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="hidden print:block text-center py-2 bg-white mb-2 shrink-0">
+                   <h2 className="text-xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
+                </div>
+                <div className="overflow-auto flex-1 print:overflow-visible">
+                  <table className="w-full text-center border-collapse text-[14px] print:text-[11px] gantt-table relative min-w-[800px]">
+                    <thead className="sticky top-0 z-20 shadow-sm">
+                      <tr className="bg-slate-100 print:bg-gray-100">
+                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100">姓名</th>
+                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100">崗位</th>
+                        {weekDates.map((d, i) => (
+                          <th key={i} className="py-4 px-2 min-w-[120px] bg-slate-100 print:bg-gray-100 border-l border-white print:border-gray-300">
+                            <div className="text-slate-500 print:text-black font-black text-lg">{d.getDate()}</div>
+                            <div className="text-xs text-slate-400">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fEmployees.filter(emp => {
+                        if (nameFilter && !emp.name.includes(nameFilter)) return false;
+                        if (locFilter === '全部') return true;
+                        return weekDates.some(d => {
+                          const s = getShiftObj(emp.id, d);
+                          if (!s) return false;
+                          if (s.leaveType === 'work') {
+                            const activeLocs = [];
+                            if (s.shift1Start && s.shift1End) activeLocs.push(s.shift1Loc);
+                            if (s.shift2Start && s.shift2End) activeLocs.push(s.shift2Loc);
+                            if (s.shift3Start && s.shift3End) activeLocs.push(s.shift3Loc);
+                            return activeLocs.includes(locFilter);
+                          }
+                          return false; 
+                        });
+                      }).map(emp => (
+                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="py-5 px-2 font-black bg-slate-50 print:bg-transparent text-lg">{emp.name}</td>
+                          <td className="py-5 px-2 text-slate-500 font-bold bg-slate-50 print:bg-transparent">{emp.role}</td>
+                          {weekDates.map((d, i) => {
+                            const s = getShiftObj(emp.id, d);
+                            const isClickable = isAdmin;
+
+                            let bgColor = "bg-white";
+                            let textColor = "text-slate-800";
+                            let content = "";
+                            let segments = [];
+
+                            if (!s) {
+                              bgColor = "bg-transparent hover:bg-slate-100"; content = "";
+                            } else if (s.leaveType === 'work') {
+                              [1, 2, 3].forEach(n => {
+                                const loc = String(s[`shift${n}Loc`] || '');
+                                const start = decimalToStr(timeToDecimal(s[`shift${n}Start`]));
+                                const end = decimalToStr(timeToDecimal(s[`shift${n}End`]));
+                                const subId = s[`shift${n}SubId`] || s.subId; 
+                                
+                                if (loc && start && end) {
+                                  if (locFilter === '全部' || loc === locFilter) {
+                                     let subName = '';
+                                     if (subId) {
+                                       const subEmp = fEmployees.find(e => e.id === subId);
+                                       if (subEmp) subName = subEmp.name;
+                                     }
+                                     segments.push({ loc, start, end, subName });
+                                  }
+                                }
+                              });
+
+                              if (segments.length > 0) {
+                                const firstLoc = segments[0].loc;
+                                if (firstLoc.includes('麻豆')) { bgColor = "bg-[#d946ef]"; textColor = "text-white"; }
+                                else if (firstLoc.includes('六甲')) { bgColor = "bg-[#86efac]"; textColor = "text-slate-900"; }
+                                else { bgColor = "bg-blue-400"; textColor = "text-white"; }
+                              } else {
+                                bgColor = "bg-transparent hover:bg-slate-100"; 
+                              }
+                            } else {
+                              if (s.leaveType === 'off') { bgColor = "bg-yellow-100"; textColor = "text-yellow-700"; content = "休假"; }
+                              else if (s.leaveType === 'schedule_off') { bgColor = "bg-yellow-300"; textColor = "text-slate-800"; content = "排休"; }
+                              else if (s.leaveType === 'madou_off') { bgColor = "bg-purple-100"; textColor = "text-purple-800"; content = "麻豆店休"; }
+                              else if (s.leaveType === 'liujia_off') { bgColor = "bg-green-100"; textColor = "text-green-800"; content = "六甲店休"; }
+                              else if (s.leaveType === 'annual') { bgColor = "bg-green-200"; textColor = "text-green-800"; content = "特休"; }
+                              else if (s.leaveType === 'sick') { bgColor = "bg-red-200"; textColor = "text-red-800"; content = "病假"; }
+                              else if (s.leaveType === 'personal') { bgColor = "bg-orange-200"; textColor = "text-orange-800"; content = "事假"; }
+                              
+                              if (s.leaveType === 'madou_off' && locFilter === '六甲') { bgColor = "bg-transparent hover:bg-slate-100"; content = ""; }
+                              if (s.leaveType === 'liujia_off' && locFilter === '麻豆') { bgColor = "bg-transparent hover:bg-slate-100"; content = ""; }
+                            }
+
+                            return (
+                              <td 
+                                key={i} 
+                                onClick={() => isClickable && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}
+                                className={`${bgColor} ${textColor} p-2 border font-bold cursor-pointer print:border-black whitespace-pre-line leading-snug relative`}
+                              >
+                                {s && s.leaveType === 'work' ? (
+                                  segments.map((seg, idx) => (
+                                    <div key={idx} className="leading-tight mb-1 last:mb-0">
+                                      <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
+                                      {seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
+                                    </div>
+                                  ))
+                                ) : (
+                                  content
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 視圖 3: 經典表格甘特圖 */}
+            {view === 'daily' && (
+              <div className="space-y-10 print:space-y-4 animate-in fade-in slide-in-from-right-10">
+                <div className="bg-white p-8 md:p-12 print:p-4 rounded-[4rem] print:rounded-none shadow-xl print:shadow-none flex flex-col items-start justify-between gap-6 border-4 print:border-none print:border-b-2 border-slate-50 print:border-gray-300 font-black relative">
+                  
+                  {/* 日期與營運記事區塊 */}
+                  <div className="flex flex-col gap-6 w-full">
+                    <div className="flex items-center gap-4 md:gap-6 print:hidden">
+                      <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-4 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-colors text-slate-600 shadow-inner"><ChevronLeft size={32}/></button>
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-4xl md:text-5xl tracking-tight font-sans font-black text-slate-800">{date.getFullYear()}年 {date.getMonth()+1}月 {date.getDate()}日</h2>
+                        <div className="relative w-14 h-14 bg-orange-100 hover:bg-orange-200 rounded-2xl flex items-center justify-center text-orange-600 cursor-pointer overflow-hidden shadow-sm transition-colors">
+                          <Calendar size={32} className="pointer-events-none absolute" />
+                          <input type="date" className="absolute inset-0 opacity-0 cursor-pointer scale-[5] origin-center" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
+                        </div>
+                      </div>
+                      <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-4 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-colors text-slate-600 shadow-inner"><ChevronRight size={32}/></button>
+                    </div>
+
+                    <div className="hidden print:block"><h2 className="text-2xl tracking-tight font-sans font-black">{date.getFullYear()}年 {date.getMonth()+1}月 {date.getDate()}日 - 排班圖表</h2></div>
+
+                    {/* 🌟 恢復的記事功能：醒目地顯示於左上方 */}
+                    {currentDailyEvent && currentDailyEvent.text && (
+                      <div className="flex items-center gap-3 bg-red-50 text-red-700 border-4 border-red-200 px-6 py-4 rounded-3xl shadow-sm max-w-3xl print:bg-transparent print:border-none print:p-0 print:text-black">
+                        <Tag size={32} className="text-red-500 print:hidden shrink-0" />
+                        <span className="text-2xl font-black leading-snug tracking-wide">{currentDailyEvent.text.replace(/[;；]/g, ' ｜ ')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 搜尋過濾器放置於右側絕對定位 (大螢幕時) */}
+                  <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl print:hidden md:absolute md:right-12 md:top-12">
+                    <div className="relative">
+                      <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 pl-10" />
+                      <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                    </div>
+                    <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors cursor-pointer">
+                      {isAdmin && <option value="全部">全據點</option>}
+                      <option value="麻豆">📍 麻豆</option><option value="六甲">📍 六甲</option><option value="茂迪">📍 茂迪</option><option value="餐車">🚚 餐車</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 今日休假名單 */}
+                {offEmployeesToday.length > 0 && (
+                  <div className="bg-slate-100 border-b-4 border-slate-300 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 rounded-3xl print:hidden">
+                    <div className="flex items-center gap-2 text-slate-600 font-black text-xl whitespace-nowrap bg-white px-5 py-3 rounded-xl shadow-sm border border-slate-200"><Coffee size={28} className="text-amber-700" /> 🌴 今日休假/請假</div>
+                    <div className="flex flex-wrap gap-3">
+                      {offEmployeesToday.map((e, i) => (
+                        <div key={i} className="bg-white border-2 border-slate-200 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:border-orange-300 transition-colors">
+                          <span className="font-black text-slate-800 text-lg">{e.name}</span>
+                          <span className="text-sm bg-slate-200 text-slate-600 px-3 py-1 rounded-lg font-bold">
+                            {{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[e.type] || '休假'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* 表格版本甘特圖 */}
+                <div className="bg-white rounded-[4rem] print:rounded-none shadow-2xl print:shadow-none border-4 print:border border-slate-50 print:border-gray-200 overflow-x-auto print:overflow-visible p-8 md:p-12 print:p-0">
+                  <div className="min-w-[1200px] print:min-w-full">
+                    <table className="w-full text-center border-collapse text-[12px] print:text-[10px] gantt-table table-fixed relative shadow-sm">
+                      <thead className="sticky top-0 z-20 shadow-md">
+                        <tr className="bg-slate-800 text-white print:bg-gray-200 print:text-black">
+                          <th className="w-20 py-3 bg-slate-800 print:bg-gray-200 text-sm">姓名</th>
+                          <th className="w-24 py-3 bg-slate-800 print:bg-gray-200 text-sm">崗位/地點</th>
+                          <th className="w-40 text-[12px] leading-tight border-r-4 border-slate-400 p-2 bg-slate-800 print:bg-gray-200 align-middle">
+                            <div className="text-slate-200 print:text-slate-800 font-bold">
+                              {date.getMonth()+1}/{date.getDate()}({['日','一','二','三','四','五','六'][date.getDay()]}) <span className="text-[10px] block opacity-80">(紅字為代班)</span>
+                            </div>
+                          </th>
+                          {timeSlots.map((slot, i) => (
+                            <th key={i} className={`w-8 py-3 font-mono text-sm bg-slate-800 print:bg-gray-200 ${slot.val % 1 === 0 ? 'border-l border-white/30 print:border-black' : ''}`}>
+                              {slot.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fEmployees.filter(emp => {
+                          if (nameFilter && !emp.name.includes(nameFilter)) return false;
+                          if (locFilter === '全部') return true;
+                          const s = getShiftObj(emp.id, date);
+                          if (!s || s.leaveType !== 'work') return false;
+                          
+                          const activeLocs = [];
+                          if (s.shift1Start && s.shift1End) activeLocs.push(s.shift1Loc);
+                          if (s.shift2Start && s.shift2End) activeLocs.push(s.shift2Loc);
+                          if (s.shift3Start && s.shift3End) activeLocs.push(s.shift3Loc);
+                          
+                          return activeLocs.includes(locFilter);
+                        }).map(emp => {
+                          const s = getShiftObj(emp.id, date);
+                          const isWork = s?.leaveType === 'work';
+                          const isOff = s && s.leaveType !== 'work';
+                          
+                          let infoStr = '';
+                          let segments = [];
+                          
+                          if (!s) infoStr = ''; 
+                          else if (s.leaveType === 'off') infoStr = '休假';
+                          else if (s.leaveType === 'schedule_off') infoStr = '排休';
+                          else if (s.leaveType === 'madou_off') infoStr = '麻豆店休';
+                          else if (s.leaveType === 'liujia_off') infoStr = '六甲店休';
+                          else if (s.leaveType === 'annual') infoStr = '特休';
+                          else if (s.leaveType === 'sick') infoStr = '病假';
+                          else if (s.leaveType === 'personal') infoStr = '事假';
+                          
+                          const slotLocations = new Map();
+                          const slotSubs = new Map();
+
+                          if (isWork) {
+                            [1, 2, 3].forEach(n => {
+                              const loc = String(s[`shift${n}Loc`] || '');
+                              const stRaw = s[`shift${n}Start`];
+                              const edRaw = s[`shift${n}End`];
+                              const st = timeToDecimal(stRaw);
+                              const ed = timeToDecimal(edRaw);
+                              const subId = s[`shift${n}SubId`] || s.subId;
+                              
+                              if (locFilter !== '全部' && loc !== locFilter) return; 
+                              
+                              if (st !== null && ed !== null) {
+                                let subName = '';
+                                if (subId) {
+                                  const subEmp = fEmployees.find(e => e.id === subId);
+                                  if (subEmp) subName = subEmp.name;
+                                }
+                                
+                                segments.push({ loc, start: decimalToStr(st), end: decimalToStr(ed), subName });
+
+                                timeSlots.forEach(slot => { 
+                                  if (slot.val >= st && slot.val < ed) {
+                                    slotLocations.set(slot.val, loc); 
+                                    if (subName) slotSubs.set(slot.val, subName);
+                                  }
+                                });
+                              }
+                            });
+                          }
+
+                          if (isOff) {
+                            return (
+                              <tr key={emp.id} className="cursor-pointer border-b bg-stripes opacity-90 hover:opacity-100 h-14" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
+                                <td className="py-2 font-black text-slate-400 bg-white text-base">{emp.name}</td>
+                                <td className="text-slate-400 font-bold bg-white text-sm">{emp.role}</td>
+                                <td className="border-r-4 border-slate-300 font-mono font-black text-slate-400 bg-white text-base">{infoStr}</td>
+                                <td colSpan={timeSlots.length} className="text-center">
+                                  <div className="flex items-center justify-center gap-3 w-full h-full py-1">
+                                    <Coffee size={24} className="text-slate-400" />
+                                    <span className="text-xl font-black text-slate-500 tracking-[0.5rem] bg-white/80 px-6 py-1.5 rounded-2xl shadow-sm border border-slate-200">
+                                      {{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[s.leaveType] || '休假'}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={emp.id} className="hover:bg-slate-50 cursor-pointer border-b h-14 transition-colors" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
+                              <td className="py-2 font-black text-base">{emp.name}</td>
+                              <td className="text-slate-500 font-bold text-sm">{emp.role} {isWork && segments.length > 0 ? `(${segments[0].loc})` : ''}</td>
+                              <td className="border-r-4 border-slate-300 print:border-black font-mono text-sm">
+                                {segments.length > 0 ? segments.map((seg, idx) => (
+                                  <div key={idx} className="mb-1 last:mb-0 leading-tight">
+                                    <span className={seg.subName ? "text-red-600 line-through" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {seg.subName && <div className="text-red-600 text-[11px] font-black mt-0.5">由 {seg.subName} 代</div>}
+                                  </div>
+                                )) : <span className="text-slate-400">{infoStr}</span>}
+                              </td>
+                              {timeSlots.map((slot, i) => {
+                                const loc = slotLocations.get(slot.val);
+                                const subName = slotSubs.get(slot.val);
+                                let bgColor = '';
+                                
+                                if (loc) {
+                                  if (loc.includes('六甲')) bgColor = 'bg-green-500 print:bg-black print:text-white';
+                                  else if (loc.includes('麻豆')) bgColor = 'bg-purple-500 print:bg-black print:text-white';
+                                  else bgColor = 'bg-blue-500 print:bg-black print:text-white';
+                                }
+                                
+                                return (
+                                  <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
+                                     {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[10px] text-white opacity-90 scale-75 origin-top-left ml-0.5 mt-0.5 font-black bg-black/20 px-1 rounded">代</span>}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+        {/* --- 彈窗模組 (列印時全數隱藏) --- */}
+        <div className="print:hidden">
+          {/* 列印/PDF 匯出教學 */}
+          {showPrintModal && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[7000] p-6 font-black font-sans print:hidden">
+              <div className="bg-white rounded-[3rem] w-full max-w-lg p-10 shadow-2xl border-4 border-white/20 animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6 border-b-4 border-slate-50 pb-6">
+                  <h3 className="text-3xl font-black flex items-center gap-3 text-orange-600"><Printer size={36}/> 匯出 PDF 步驟</h3>
+                  <button onClick={() => setShowPrintModal(false)} className="text-slate-400 hover:text-black bg-slate-100 p-3 rounded-full transition-colors"><X size={28}/></button>
+                </div>
+                <div className="space-y-6 text-slate-700">
+                  <div className="bg-orange-50 p-6 rounded-2xl border-2 border-orange-100 space-y-4">
+                    <p className="text-xl font-black text-orange-800">請直接使用「鍵盤快捷鍵」喚醒印表機：</p>
+                    <ul className="space-y-3 text-lg font-bold">
+                      <li>👉 Windows 電腦：按 <kbd className="bg-white px-2 py-1 rounded shadow border text-orange-600">Ctrl</kbd> + <kbd className="bg-white px-2 py-1 rounded shadow border text-orange-600">P</kbd></li>
+                      <li>👉 Mac 電腦：按 <kbd className="bg-white px-2 py-1 rounded shadow border text-orange-600">Command</kbd> + <kbd className="bg-white px-2 py-1 rounded shadow border text-orange-600">P</kbd></li>
+                    </ul>
+                  </div>
+                  <p className="text-md font-bold text-slate-500 bg-slate-50 p-4 rounded-xl">
+                    💡 快捷鍵按下去後，在跳出的視窗中，將「印表機 / 目的地」選擇為 <span className="text-blue-600">【另存為 PDF】</span>，就可以獲得完美的 A4 排班表囉！
+                  </p>
+                  <button onClick={() => setShowPrintModal(false)} className="w-full py-6 bg-orange-600 text-white rounded-2xl text-2xl font-black shadow-xl active:scale-95 transition-all mt-4">我了解了</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 系統安全設定 */}
+          {mSettings && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[8000] p-4 md:p-6 font-black font-sans">
+              <div className="bg-white rounded-3xl w-full max-w-xl p-6 md:p-8 shadow-2xl border-4 border-white/20 animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6 border-b-2 border-slate-50 pb-4">
+                  <h3 className="text-2xl font-black flex items-center gap-3 text-slate-800"><Settings className="text-orange-600" size={28}/> 系統與密碼設定</h3>
+                  <button onClick={() => setMSettings(false)} className="text-slate-400 hover:text-black bg-slate-100 p-2 rounded-full transition-colors"><X size={24}/></button>
+                </div>
+                <div className="space-y-4 md:space-y-6">
+                  <div>
+                    <label className="block text-slate-500 mb-1 md:mb-2 text-sm">基地代號 (店鋪代碼)</label>
+                    <input className="w-full border-2 p-3 rounded-xl text-lg font-black focus:border-orange-500 outline-none bg-slate-50" value={base} onChange={e => onUpdateBase(e.target.value)} />
+                  </div>
+                  <div className="p-4 md:p-6 bg-orange-50 rounded-2xl border-2 border-orange-100 space-y-3 md:space-y-4">
+                    <h4 className="text-lg text-orange-800 font-black mb-2 flex items-center gap-2"><Lock size={20}/> 通行密碼變更</h4>
+                    <div>
+                      <label className="block text-orange-700/70 text-xs mb-1">主管編輯密碼</label>
+                      <input type="text" className="w-full border-2 p-2 rounded-lg text-base font-black focus:border-orange-500 outline-none" value={pwdForm.admin} onChange={e => setPwdForm({...pwdForm, admin: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-orange-700/70 text-xs mb-1">夥伴檢視密碼</label>
+                      <input type="text" className="w-full border-2 p-2 rounded-lg text-base font-black focus:border-orange-500 outline-none" value={pwdForm.staff} onChange={e => setPwdForm({...pwdForm, staff: e.target.value})} />
+                    </div>
+                  </div>
+                  <button onClick={async () => {
+                    if(!pwdForm.admin || !pwdForm.staff) return alert("密碼不能為空！");
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth'), { admin: pwdForm.admin, staff: pwdForm.staff });
+                    localStorage.setItem('tsn_base', base);
+                    setMSettings(false); triggerToast(); alert("設定已儲存！下次登入將生效。");
+                  }} className="w-full py-4 bg-orange-600 text-white rounded-xl text-xl font-black shadow-lg active:scale-95 transition-all">💾 儲存所有設定</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 一鍵數據備份與還原 */}
+          {mBackup && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[6000] p-6 font-black font-sans">
+              <div className="bg-white rounded-[4rem] w-full max-w-2xl p-14 shadow-2xl border-4 border-white/20 animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center mb-10 border-b-4 border-slate-50 pb-8 shrink-0">
+                  <div>
+                     <h3 className="text-4xl font-black flex items-center gap-4 text-slate-800"><Shield className="text-blue-600" size={40}/> 備份與還原系統</h3>
+                     <p className="text-slate-400 text-sm mt-3 ml-14">資料自動保護，備份檔是您的最終防線！</p>
+                  </div>
+                  <button onClick={() => setMBackup(false)} className="text-slate-400 hover:text-black bg-slate-100 p-4 rounded-full transition-colors"><X size={32}/></button>
+                </div>
+                
+                <div className="space-y-12 overflow-y-auto flex-1 pr-2">
+                  {/* 一鍵下載 */}
+                  <div className="bg-blue-50 p-8 rounded-[3rem] border-4 border-blue-100">
+                     <h4 className="text-2xl text-blue-800 mb-6">步驟 1：下載備份檔保存</h4>
+                     <button onClick={handleDownloadBackup} className="w-full py-6 bg-blue-600 text-white rounded-3xl text-2xl font-black flex justify-center items-center gap-4 shadow-xl active:scale-95 transition-all"><Download size={32}/> 📥 一鍵下載備份 (.json)</button>
+                  </div>
+                  
+                  {/* 一鍵上傳 */}
+                  <div className="bg-orange-50 p-8 rounded-[3rem] border-4 border-orange-100 relative">
+                     <h4 className="text-2xl text-orange-800 mb-4">步驟 2：從舊備份檔還原資料</h4>
+                     <input type="file" accept=".json" ref={fileInputRef} onChange={handleUploadRestore} className="hidden" />
+                     <button onClick={() => fileInputRef.current.click()} className="w-full py-6 bg-orange-600 text-white rounded-3xl text-2xl font-black flex justify-center items-center gap-4 shadow-xl active:scale-95 transition-all"><Upload size={32}/> 📤 選擇檔案並執行還原</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 夥伴管理 */}
+          {mHR && (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[5000] p-4 md:p-6 font-black font-sans">
+              <div className="bg-white rounded-[4rem] w-full max-w-7xl h-[90vh] md:h-[85vh] flex flex-col overflow-hidden shadow-2xl border-4 border-white/20">
+                <div className="bg-slate-900 p-6 md:p-10 text-white flex justify-between items-center"><h3 className="text-2xl md:text-3xl font-black flex items-center gap-4"><Users2 size={40}/> 永久夥伴資料庫</h3><button onClick={() => setMHR(false)} className="hover:bg-slate-700 p-3 rounded-full transition-all"><X size={40}/></button></div>
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                  <div className="lg:col-span-4 p-6 md:p-10 bg-slate-50 border-b lg:border-b-0 lg:border-r-8 border-white overflow-y-auto space-y-8 flex flex-col">
+                    <h4 className="text-orange-600 font-black border-b-4 border-orange-100 pb-4 text-xl md:text-2xl uppercase">{hrForm.id ? '✏️ 編輯夥伴資料' : '➕ 新增夥伴'}</h4>
+                    <div className="space-y-6">
+                      <input className="w-full border-4 p-6 rounded-2xl text-xl md:text-2xl font-black outline-none focus:border-orange-500 shadow-inner bg-white" placeholder="夥伴姓名" value={hrForm.name} onChange={e => setHrForm({...hrForm, name: e.target.value})} />
+                      <select className="w-full border-4 p-6 rounded-2xl text-xl md:text-2xl font-black outline-none focus:border-orange-500 shadow-inner bg-white" value={hrForm.type} onChange={e => setHrForm({...hrForm, type: e.target.value})}><option value="月薪">月薪</option><option value="PT">PT</option></select>
+                      <select className="w-full border-4 p-6 rounded-2xl text-xl md:text-2xl font-black outline-none focus:border-orange-500 shadow-inner bg-white" value={hrForm.role} onChange={e => setHrForm({...hrForm, role: e.target.value})}>
+                        <option value="主廚">主廚</option>
+                        <option value="湯台">湯台</option>
+                        <option value="炸台">炸台</option>
+                        <option value="櫃台">櫃台</option>
+                        <option value="吧台">吧台</option>
+                        <option value="外場人員">外場人員</option>
+                        <option value="機動人員">機動人員</option>
+                        <option value="餐車">餐車</option>
+                        <option value="外送">外送</option>
+                      </select>
+                      <div className="flex gap-4 pt-4">
+                        <button onClick={async () => {
+                          if(!hrForm.name) return;
+                          if(hrForm.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', hrForm.id), { name: hrForm.name, type: hrForm.type, role: hrForm.role, base: base }, { merge: true });
+                          else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'employees'), { name: hrForm.name, type: hrForm.type, role: hrForm.role, base: base });
+                          setHrForm({ id: null, name: '', type: '月薪', role: '主廚' }); triggerToast();
+                        }} className="flex-1 py-6 bg-orange-600 text-white rounded-3xl font-black text-xl md:text-2xl shadow-lg active:scale-95 transition-all">{hrForm.id ? '💾 更新資料' : '🚀 存入名單'}</button>
+                        {hrForm.id && <button onClick={() => setHrForm({ id: null, name: '', type: '月薪', role: '主廚' })} className="py-6 px-6 bg-slate-200 text-slate-600 rounded-3xl font-black text-lg md:text-xl hover:bg-slate-300 transition-all">取消</button>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-8 p-6 md:p-12 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-8 content-start bg-white">
+                    {fEmployees.map(e => (
+                      <div key={e.id} className="p-6 md:p-8 border-4 border-slate-50 rounded-[3rem] flex justify-between items-center shadow-lg hover:border-orange-100 transition-all group">
+                        <div>
+                          <div className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3">{String(e.name)} <span className={`text-sm text-white px-4 py-1.5 rounded-full align-middle ${e.type === 'PT' ? 'bg-indigo-500' : 'bg-blue-600'}`}>{e.type || '月薪'}</span></div>
+                          <div className="text-sm md:text-lg text-slate-400 uppercase tracking-widest font-bold">{String(e.role)}</div>
+                        </div>
+                        <div className="flex gap-3">
+                          <button onClick={() => setHrForm({ id: e.id, name: e.name, type: e.type || '月薪', role: e.role })} className="p-4 md:p-6 text-blue-500 bg-blue-50 hover:bg-blue-100 rounded-full transition-all shadow-inner"><Edit3 size={28}/></button>
+                          <button onClick={async () => { if(window.confirm(`確定移除 ${e.name}？`)) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', e.id)); triggerToast(); } }} className="p-4 md:p-6 text-red-500 bg-red-50 hover:bg-red-100 rounded-full transition-all shadow-inner"><Trash2 size={28}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 營運記事編輯視窗 */}
+          {eEvent && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[5500] p-6 font-black font-sans">
+              <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 border-4 border-white/20">
+                <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)}><X/></button></div>
+                <textarea id="et-box" className="w-full border-4 p-4 rounded-xl h-48 text-xl" defaultValue={eEvent.text} placeholder="例如：六甲店休" />
+                <button onClick={async () => {
+                   const txt = document.getElementById('et-box').value;
+                   const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day));
+                   const ref = doc(db, 'artifacts', appId, 'public', 'data', 'events', `event_${k}`);
+                   if (!txt.trim()) await deleteDoc(ref); else await setDoc(ref, { key: k, text: txt.trim(), base: base });
+                   setEEvent(null); triggerToast();
+                }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl">💾 儲存事項</button>
+              </div>
+            </div>
+          )}
+
+          {/* 排班設定視窗 */}
+          {eShift && (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-2xl flex items-center justify-center z-[5000] p-4 md:p-6 font-black font-sans">
+              <div className="bg-white rounded-[4rem] md:rounded-[5rem] w-full max-w-4xl overflow-hidden flex flex-col max-h-[95vh] shadow-2xl border-4 border-white/20">
+                <div className="bg-orange-600 p-6 md:p-10 text-white flex justify-between items-center shadow-xl"><h3 className="text-2xl md:text-4xl font-black flex items-center gap-4"><Clock size={40}/> 排班設定 ({fEmployees.find(e=>e.id===eShift.empId)?.name})</h3><button onClick={() => setEShift(null)} className="bg-white/20 p-2 md:p-3 rounded-full hover:bg-white/40 transition-all"><X size={32}/></button></div>
+                <div className="p-6 md:p-12 flex-1 overflow-y-auto space-y-8 md:space-y-10 bg-slate-50">
+                   <div className="grid grid-cols-4 gap-3 md:gap-6">
+                     {['work', 'off', 'annual', 'sick'].map(id => (
+                       <button key={id} onClick={() => setEShift({...eShift, leaveType: id})} className={`py-4 md:py-8 rounded-2xl md:rounded-[2.5rem] border-4 md:border-8 font-black text-lg md:text-3xl transition-all ${eShift.leaveType===id ? 'border-orange-600 text-orange-600 bg-white shadow-2xl scale-105':'border-slate-200 text-slate-400 bg-white'}`}>
+                         {id === 'work' ? '出勤' : id === 'off' ? '休假' : id === 'annual' ? '特休' : '病假'}
+                       </button>
+                     ))}
+                   </div>
+                   {eShift.leaveType === 'work' && (
+                     <div className="space-y-8">
+                       
+                       {/* ⚡ 快捷排班按鈕區 */}
+                       <div className="bg-orange-50 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border-4 border-orange-100 shadow-sm mb-6">
+                          <div className="text-orange-800 font-black mb-4 text-xl md:text-2xl flex items-center gap-2"><Zap size={28}/> ⚡ 快捷打班</div>
+                          <div className="flex flex-wrap gap-3 md:gap-4">
+                             <button onClick={() => applyShiftTemplate('full')} className="px-4 py-3 md:px-6 md:py-4 bg-orange-600 text-white rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">月薪全班</button>
+                             <button onClick={() => applyShiftTemplate('morning')} className="px-4 py-3 md:px-6 md:py-4 bg-orange-500 text-white rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">早班</button>
+                             <button onClick={() => applyShiftTemplate('evening')} className="px-4 py-3 md:px-6 md:py-4 bg-indigo-500 text-white rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">晚班</button>
+                             <button onClick={() => applyShiftTemplate('pt_a')} className="px-4 py-3 md:px-6 md:py-4 bg-teal-500 text-white rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">PT午峰</button>
+                             <button onClick={() => applyShiftTemplate('pt_b')} className="px-4 py-3 md:px-6 md:py-4 bg-blue-500 text-white rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">PT晚峰</button>
+                             <button onClick={() => applyShiftTemplate('clear')} className="px-4 py-3 md:px-6 md:py-4 bg-slate-300 text-slate-700 rounded-xl md:rounded-2xl font-black text-sm md:text-xl shadow-lg hover:scale-105 active:scale-95 transition-all">🧹 清空</button>
+                          </div>
+                       </div>
+
+                       {[1, 2, 3].map(n => (
+                         <div key={n} className="p-6 md:p-8 bg-white rounded-[2rem] md:rounded-[3rem] border-4 border-slate-100 shadow-xl">
+                           <div className="flex justify-between items-center mb-6 border-b-4 pb-4">
+                             <span className="text-lg md:text-xl font-black text-orange-600 uppercase tracking-[0.5rem]">第 {n} 段班</span>
+                             <select value={eShift[`shift${n}SubId`]||''} onChange={e=>setEShift({...eShift,[`shift${n}SubId`]:e.target.value})} className="border-2 p-2 rounded-xl text-sm md:text-base text-red-600 bg-red-50 focus:border-red-500 outline-none">
+                               <option value="">(無代班)</option>
+                               {fEmployees.filter(emp=>emp.id!==eShift.empId).map(e=><option key={e.id} value={e.id}>{e.name}代</option>)}
+                             </select>
+                           </div>
+                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
+                             <select className="border-4 p-4 md:p-5 rounded-2xl font-black text-xl md:text-3xl bg-slate-50 focus:border-orange-500 outline-none" value={eShift[`shift${n}Loc`] || '麻豆'} onChange={e => setEShift({...eShift, [`shift${n}Loc`]: e.target.value})}><option value="麻豆">麻豆</option><option value="六甲">六甲</option><option value="新光">新光</option><option value="茂迪">茂迪</option><option value="餐車">餐車</option></select>
+                             <input type="time" className="border-4 p-4 md:p-5 rounded-2xl font-black font-mono text-xl md:text-3xl bg-slate-50 focus:border-orange-500 outline-none" value={eShift[`shift${n}Start`] || ''} onChange={e => setEShift({...eShift, [`shift${n}Start`]: e.target.value})}/>
+                             <input type="time" className="border-4 p-4 md:p-5 rounded-2xl font-black font-mono text-xl md:text-3xl bg-slate-50 focus:border-orange-500 outline-none" value={eShift[`shift${n}End`] || ''} onChange={e => setEShift({...eShift, [`shift${n}End`]: e.target.value})}/>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                </div>
+                <div className="p-6 md:p-12 bg-white border-t-4 border-slate-50"><button onClick={async () => {
+                  const id = `${eShift.empId}_${eShift.key}`;
+                  await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shifts', id), { ...eShift, base: base });
+                  setEShift(null); triggerToast();
+                }} className="w-full py-6 md:py-10 bg-orange-600 text-white rounded-[2rem] md:rounded-[3.5rem] font-black text-2xl md:text-4xl shadow-2xl active:scale-95 transition-all">💾 確認儲存</button></div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const root = createRoot(document.getElementById('root'));
+  root.render(<App />);
+  </script>
+</body>
+</html>
