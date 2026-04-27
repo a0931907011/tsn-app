@@ -177,20 +177,20 @@
         if (!isAdmin && locFilter === '全部') setLocFilter('麻豆');
       }, [isAdmin, locFilter]);
 
-      // 🎨 顏色與文字換行引擎
+      // 🎨 顏色與文字換行引擎 (為了一頁式月曆優化字體大小)
       const renderEvents = (txt) => {
         if (!txt) return null;
         return String(txt).split(/[;；]/).map((str, idx) => {
           const t = str.trim();
           if (!t) return null;
           
-          if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-red-600 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-red-100 print:border-none">🚨 {String(t)}</div>;
-          if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-green-700 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-green-100 print:border-none">🚨 {String(t)}</div>;
-          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-purple-700 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-purple-100 print:border-none">🚨 {String(t)}</div>;
-          if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] text-orange-600 font-black mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-1 rounded shadow-sm print:shadow-none border border-orange-100 print:border-none">📌 {String(t)}</div>;
+          if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-sm md:text-base print:text-[14px] text-red-600 font-black mb-1 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-0.5 rounded shadow-sm print:shadow-none border border-red-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-sm md:text-base print:text-[14px] text-green-700 font-black mb-1 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-0.5 rounded shadow-sm print:shadow-none border border-green-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-sm md:text-base print:text-[14px] text-purple-700 font-black mb-1 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-0.5 rounded shadow-sm print:shadow-none border border-purple-100 print:border-none">🚨 {String(t)}</div>;
+          if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-sm md:text-base print:text-[14px] text-orange-600 font-black mb-1 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-2 py-0.5 rounded shadow-sm print:shadow-none border border-orange-100 print:border-none">📌 {String(t)}</div>;
           
           return (
-            <div key={idx} className="truncate print:whitespace-normal print:break-words text-lg print:text-[14px] bg-yellow-100 text-slate-800 print:bg-transparent print:border-none border border-yellow-200 px-3 print:px-0 py-1.5 print:py-0 rounded-lg shadow-sm print:shadow-none mb-1.5 print:mb-0.5 font-bold print:leading-tight">
+            <div key={idx} className="truncate print:whitespace-normal print:break-words text-sm md:text-base print:text-[14px] bg-yellow-100 text-slate-800 print:bg-transparent print:border-none border border-yellow-200 px-2 print:px-0 py-0.5 print:py-0 rounded shadow-sm print:shadow-none mb-1 print:mb-0.5 font-bold print:leading-tight">
               📌 {String(t)}
             </div>
           );
@@ -420,37 +420,36 @@
 
           <main className="flex-1 w-full max-w-[2400px] mx-auto p-4 md:p-8 print:p-0 print:m-0 font-black">
             
-            {/* 視圖 1: 月總表 (已移除排班人員，變為純記事月曆) */}
+            {/* 視圖 1: 月總表 (一頁式完美自適應版) */}
             {view === 'monthly' && (
-              <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print:shadow-none border-4 print:border-2 border-slate-50 print:border-gray-200 overflow-hidden font-black">
-                <div className="hidden print:block text-center py-4 border-b-2 border-gray-200 bg-slate-50">
+              <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border-2 print:border-2 border-slate-200 print:border-gray-200 overflow-hidden font-black flex flex-col h-[75vh] md:h-[82vh]">
+                <div className="hidden print:block text-center py-4 border-b-2 border-gray-200 bg-slate-50 shrink-0">
                    <h2 className="text-2xl font-black">{date.getFullYear()}年 {date.getMonth() + 1}月 - 泰膳娘營運記事月曆 (據點: {base})</h2>
                 </div>
                 
-                <div className="overflow-x-auto print:overflow-visible">
-                  <div className="min-w-[1400px] lg:min-w-full print:min-w-full">
-                    <div className="grid grid-cols-7 bg-slate-900 print:bg-slate-100 print:border-t-2 print:border-l-2 print:border-gray-300 text-slate-400 print:text-slate-800 text-[12px] print:text-[14px] tracking-widest text-center py-6 print:py-3 uppercase font-black">
+                <div className="w-full flex-1 flex flex-col">
+                    <div className="grid grid-cols-7 bg-slate-900 print:bg-slate-100 print:border-t-2 print:border-l-2 print:border-gray-300 text-slate-400 print:text-slate-800 text-xs md:text-sm tracking-widest text-center py-3 print:py-3 uppercase font-black shrink-0">
                       {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(d => <div key={d} className="print:border-r-2 print:border-gray-300">{d}</div>)}
                     </div>
-                    <div className="grid grid-cols-7 print:border-l-2 print:border-gray-300">
-                      {Array.from({ length: (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => <div key={i} className="min-h-[160px] print:min-h-0 print:h-auto bg-slate-50/50 print:bg-gray-50 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300" />)}
+                    {/* 使用 auto-rows-fr 讓格子自動均分高度，完全填滿畫面不產生捲軸 */}
+                    <div className="flex-1 grid grid-cols-7 auto-rows-fr print:border-l-2 print:border-gray-300">
+                      {Array.from({ length: (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => <div key={`empty-${i}`} className="bg-slate-50/50 print:bg-gray-50 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300" />)}
                       {Array.from({ length: new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() }).map((_, i) => {
                         const day = i + 1; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), day));
                         const ev = fEvents.find(v => v.key === k);
                         return (
-                          <div key={day} onClick={() => { setDate(new Date(date.getFullYear(), date.getMonth(), day)); setView('daily'); }} className="min-h-[160px] print:min-h-0 print:h-[120px] p-6 print:p-4 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300 hover:bg-orange-50/40 transition-colors cursor-pointer relative group flex flex-col">
-                            <div className="flex justify-between items-start mb-4 print:mb-2">
-                              <span className="text-3xl print:text-2xl text-slate-400 print:text-black font-sans font-black">{day}</span>
-                              {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEEvent({ day, text: ev?.text || "" }); }} className="p-2 text-slate-100 group-hover:text-orange-500 transition-colors print:hidden"><Tag size={24}/></button>}
+                          <div key={day} onClick={() => { setDate(new Date(date.getFullYear(), date.getMonth(), day)); setView('daily'); }} className="p-2 md:p-3 border-r print:border-r-2 print:border-gray-300 border-b print:border-b-2 print:border-gray-300 hover:bg-orange-50/40 transition-colors cursor-pointer relative group flex flex-col overflow-hidden">
+                            <div className="flex justify-between items-start mb-1 shrink-0">
+                              <span className="text-xl md:text-2xl text-slate-400 print:text-black font-sans font-black">{day}</span>
+                              {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEEvent({ day, text: ev?.text || "" }); }} className="p-1 text-slate-100 group-hover:text-orange-500 transition-colors print:hidden"><Tag size={18}/></button>}
                             </div>
-                            <div className="flex-1 space-y-2">
+                            <div className="flex-1 overflow-y-auto space-y-1 calendar-cell-scroll">
                               {renderEvents(ev?.text)}
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
                 </div>
               </div>
             )}
