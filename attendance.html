@@ -43,6 +43,7 @@
       UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download
     } from 'lucide-react';
 
+    // 🔐 共用泰膳娘雲端金鑰
     const firebaseConfig = {
       apiKey: "AIzaSyCitzdvwC1VEjXq_-ypAVhkeo9aWwuTfQI",
       authDomain: "tsn-shife.firebaseapp.com",
@@ -57,6 +58,7 @@
     const db = getFirestore(app);
     const appId = 'tsn-official-app'; 
 
+    // 🚦 紅綠燈 UI 元件
     const TrafficLight = ({ status, diff }) => {
       const tooltip = status === 'none' ? '尚未打卡' : status === 'green' ? '準時或提早' : `遲到 ${diff} 分鐘`;
       return (
@@ -68,6 +70,7 @@
       );
     };
 
+    // 🛡️ 入口防護鎖元件
     export default function App() {
       const [user, setUser] = useState(null);
       const [ready, setReady] = useState(false);
@@ -84,7 +87,7 @@
       const handleLogin = async () => {
         setIsLoadingAuth(true);
         const pwd = document.getElementById('pwd-input').value;
-        let adminPwd = "tsn168";
+        let adminPwd = "tsn168"; // 預設密碼
         try {
           const authDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth'));
           if (authDoc.exists() && authDoc.data().admin) adminPwd = authDoc.data().admin;
@@ -112,6 +115,7 @@
       return <AttendanceApp user={user} onLogout={() => setRole('none')} />;
     }
 
+    // 📋 主系統元件
     function AttendanceApp({ user, onLogout }) {
       const [employees, setEmployees] = useState([]);
       const [shifts, setShifts] = useState([]);
@@ -188,7 +192,6 @@
 
       const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2000); };
 
-      // 新增：下載打卡備份
       const downloadBackup = () => {
         const data = { employees, shifts, attendances, backupDate: new Date().toISOString(), type: 'attendance_backup' };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -257,17 +260,19 @@
               </div>
 
               <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronLeft size={24}/></button>
-                <div className="relative flex items-center gap-2 px-4 cursor-pointer text-teal-700 hover:text-teal-600 bg-white py-1 rounded-lg shadow-sm">
+                {/* 🔧 修復處：加上 z-10 保護按鈕，並在中間加上 overflow-hidden 裁切透明框 */}
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 hover:bg-white rounded-lg transition-colors z-10 relative"><ChevronLeft size={24}/></button>
+                
+                <div className="relative flex items-center gap-2 px-4 cursor-pointer text-teal-700 hover:text-teal-600 bg-white py-1 rounded-lg shadow-sm overflow-hidden">
                   <Calendar size={20} />
                   <span className="text-xl font-black">{date.getFullYear()}/{date.getMonth() + 1}/{date.getDate()}</span>
-                  <input type="date" className="absolute inset-0 opacity-0 cursor-pointer scale-[2]" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
+                  <input type="date" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
                 </div>
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronRight size={24}/></button>
                 
-                {/* 新增備份按鈕 */}
-                <button onClick={downloadBackup} className="ml-2 p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold" title="下載資料備份"><Download size={20}/></button>
-                <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold" title="登出系統"><LogOut size={20}/></button>
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 hover:bg-white rounded-lg transition-colors z-10 relative"><ChevronRight size={24}/></button>
+                
+                <button onClick={downloadBackup} className="ml-2 p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold z-10 relative" title="下載資料備份"><Download size={20}/></button>
+                <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors shadow-inner flex items-center gap-1 font-bold z-10 relative" title="登出系統"><LogOut size={20}/></button>
               </div>
             </div>
           </nav>
