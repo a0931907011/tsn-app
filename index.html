@@ -176,7 +176,7 @@
         if (!isAdmin && locFilter === '全部') setLocFilter('麻豆');
       }, [isAdmin, locFilter]);
 
-      // 🎨 顏色與文字換行引擎 (一頁式月曆優化字體大小)
+      // 🎨 顏色與文字換行引擎
       const renderEvents = (txt) => {
         if (!txt) return null;
         return String(txt).split(/[;；]/).map((str, idx) => {
@@ -196,7 +196,7 @@
         });
       };
 
-      // ⚡ 快捷排班引擎 (加入 specialLeave 標記)
+      // ⚡ 快捷排班引擎
       const applyShiftTemplate = (type) => {
         let updates = {};
         const defLoc1 = eShift.shift1Loc || '麻豆';
@@ -329,19 +329,17 @@
         return Array.from({length: 7}, (_, i) => { const x = new Date(date); x.setDate(x.getDate() - d + i + 1); return x; });
       }, [date]);
 
-      // 🌟 依照「星期日」落在哪個月，精準計算該月有幾週 (解決跨月第6週的問題)
       const monthWeeks = useMemo(() => {
         const year = date.getFullYear();
         const month = date.getMonth();
         const weeks = [];
 
         let firstDay = new Date(year, month, 1);
-        let dayOfWeek = firstDay.getDay(); // 0 是星期日
+        let dayOfWeek = firstDay.getDay(); 
         let firstSundayDate = dayOfWeek === 0 ? 1 : 1 + (7 - dayOfWeek);
 
         let currentSunday = new Date(year, month, firstSundayDate);
 
-        // 只要這個星期日還在當月內，就算作這個月的一週 (精準切分 4 或 5 週)
         while (currentSunday.getMonth() === month) {
           let monday = new Date(currentSunday);
           monday.setDate(monday.getDate() - 6);
@@ -351,7 +349,6 @@
         return weeks;
       }, [date.getFullYear(), date.getMonth()]);
 
-      // 💡 定義甘特圖 30格 時間軸 (07:00 ~ 21:30)
       const timeSlots = Array.from({ length: 30 }, (_, i) => {
         const val = 7 + (i * 0.5);
         return { val: val, label: val % 1 === 0 ? String(val) : String(val) };
@@ -389,7 +386,6 @@
                   <div className="text-[10px] md:text-xs text-slate-400 font-bold uppercase mt-1">據點: {base} | {isAdmin ? '主管編輯' : '夥伴檢視'}</div>
                 </div>
               </div>
-              {/* 手機版登出 */}
               <button onClick={onLogout} className="p-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl shadow-sm lg:hidden"><LogOut size={20}/></button>
             </div>
 
@@ -461,7 +457,7 @@
               </div>
             )}
 
-            {/* 視圖 2: 員工週總表 */}
+            {/* 視圖 2: 員工週總表 (字體放大版) */}
             {view === 'employee_matrix' && (
               <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col flex-1 min-h-[500px]">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 md:p-6 border-b bg-slate-50 print:hidden shrink-0 gap-4">
@@ -470,7 +466,6 @@
                      當週排班篩選
                   </div>
 
-                  {/* 🌟 第X週 快速切換按鈕區塊 🌟 */}
                   <div className="flex items-center gap-2 bg-slate-200/50 p-1.5 rounded-2xl shadow-inner overflow-x-auto max-w-full">
                     {monthWeeks.map((mon, index) => {
                       const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -517,16 +512,18 @@
                 <div className="hidden print:block text-center py-2 bg-white mb-2 shrink-0">
                    <h2 className="text-xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
                 </div>
+                
                 <div className="overflow-auto flex-1 print:overflow-visible">
-                  <table className="w-full text-center border-collapse text-xs md:text-[14px] print:text-[11px] gantt-table relative min-w-[800px]">
+                  <table className="w-full text-center border-collapse gantt-table relative min-w-[1000px] md:min-w-[1400px]">
                     <thead className="sticky top-0 z-20 shadow-sm">
                       <tr className="bg-slate-100 print:bg-gray-100">
-                        <th className="py-3 md:py-4 px-2 w-20 md:w-24 bg-slate-100 print:bg-gray-100">姓名</th>
-                        <th className="py-3 md:py-4 px-2 w-20 md:w-24 bg-slate-100 print:bg-gray-100">崗位</th>
+                        {/* 💡 放大姓名與崗位欄寬 */}
+                        <th className="py-3 md:py-4 px-2 w-24 md:w-32 bg-slate-100 print:bg-gray-100 text-sm md:text-base">姓名</th>
+                        <th className="py-3 md:py-4 px-2 w-24 md:w-32 bg-slate-100 print:bg-gray-100 text-sm md:text-base">崗位</th>
                         {weekDates.map((d, i) => (
-                          <th key={i} className="py-3 md:py-4 px-1 md:px-2 min-w-[100px] md:min-w-[120px] bg-slate-100 print:bg-gray-100 border-l border-white print:border-gray-300">
-                            <div className="text-slate-500 print:text-black font-black text-base md:text-lg">{d.getDate()}</div>
-                            <div className="text-[10px] md:text-xs text-slate-400">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
+                          <th key={i} className="py-3 md:py-4 px-1 md:px-2 min-w-[110px] md:min-w-[160px] bg-slate-100 print:bg-gray-100 border-l border-white print:border-gray-300">
+                            <div className="text-slate-500 print:text-black font-black text-lg md:text-xl">{d.getDate()}</div>
+                            <div className="text-xs md:text-sm text-slate-400">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
                           </th>
                         ))}
                       </tr>
@@ -549,8 +546,9 @@
                         });
                       }).map(emp => (
                         <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
-                          <td className="py-3 md:py-5 px-2 font-black bg-slate-50 print:bg-transparent text-sm md:text-lg">{emp.name}</td>
-                          <td className="py-3 md:py-5 px-2 text-slate-500 font-bold bg-slate-50 print:bg-transparent">{emp.role}</td>
+                          {/* 💡 姓名與崗位字體放大 */}
+                          <td className="py-3 md:py-5 px-2 font-black bg-slate-50 print:bg-transparent text-base md:text-2xl tracking-wide">{emp.name}</td>
+                          <td className="py-3 md:py-5 px-2 text-slate-500 font-bold bg-slate-50 print:bg-transparent text-xs md:text-base">{emp.role}</td>
                           {weekDates.map((d, i) => {
                             const s = getShiftObj(emp.id, d);
                             const isClickable = isAdmin;
@@ -606,25 +604,27 @@
                               <td
                                 key={i}
                                 onClick={() => isClickable && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}
-                                className={`${bgColor} ${textColor} p-1 md:p-2 border font-bold cursor-pointer print:border-black whitespace-pre-line leading-snug relative text-[11px] md:text-sm`}
+                                // 💡 排班內容字體全面放大 (text-[12px] md:text-[17px])
+                                className={`${bgColor} ${textColor} p-1.5 md:p-3 border font-black cursor-pointer print:border-black whitespace-pre-line leading-relaxed relative text-[12px] md:text-[17px] tracking-wide`}
                               >
                                 {s && s.leaveType === 'work' ? (
                                   <div className="flex flex-col items-center justify-center">
-                                    {/* 💡 顯示排休標籤 */}
+                                    {/* 💡 放大排休標籤 */}
                                     {s.specialLeave && (
-                                      <div className={`text-[10px] md:text-xs font-black mb-1 px-1.5 py-0.5 rounded shadow-sm inline-block ${s.specialLeave === '上午排休' ? 'text-rose-700 bg-rose-100' : 'text-fuchsia-700 bg-fuchsia-100'}`}>
+                                      <div className={`text-[11px] md:text-[15px] font-black mb-1.5 px-2 py-1 rounded shadow-sm inline-block ${s.specialLeave === '上午排休' ? 'text-rose-700 bg-rose-100 border border-rose-200' : 'text-fuchsia-700 bg-fuchsia-100 border border-fuchsia-200'}`}>
                                         {s.specialLeave}
                                       </div>
                                     )}
                                     {segments.map((seg, idx) => (
                                       <div key={idx} className="leading-tight mb-1 last:mb-0">
                                         <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                        {seg.subName && <div className="text-[9px] md:text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
+                                        {/* 💡 放大代班提示字 */}
+                                        {seg.subName && <div className="text-[10px] md:text-xs mt-0.5 text-red-600 bg-white/90 px-1.5 py-0.5 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  content
+                                  <span className="text-base md:text-xl font-black">{content}</span>
                                 )}
                               </td>
                             );
