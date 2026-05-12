@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>泰膳娘 - 出勤考核紅綠燈 (極限壓縮完美版)</title>
+  <title>泰膳娘 - 出勤考核紅綠燈 (完美對齊版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="importmap">
@@ -28,9 +28,10 @@
       .print-shadow-none { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
     }
     input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; }
-    .calendar-cell-scroll::-webkit-scrollbar { width: 4px; }
-    .calendar-cell-scroll::-webkit-scrollbar-track { background: transparent; }
-    .calendar-cell-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+    
+    /* 💡 終極隱藏捲動條：解決多段班出現捲動條導致右側對齊被往左擠壓的問題 */
+    .calendar-cell-scroll::-webkit-scrollbar { display: none; }
+    .calendar-cell-scroll { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans">
@@ -62,30 +63,20 @@
     const db = getFirestore(app);
     const appId = 'tsn-official-app'; 
 
-    // 🚦 紅綠燈 UI 元件 (💡 新增 sm 尺寸，徹底解決裁切問題)
-    const TrafficLight = ({ label, status, diff, type, hideLabel = false, size = 'normal' }) => {
+    // 🚦 紅綠燈 UI 元件 
+    const TrafficLight = ({ label, status, diff, type, hideLabel = false }) => {
       let tooltip = '尚未打卡';
       if (status !== 'none' && status) {
         if (type === 'start') tooltip = status === 'green' ? '準時或提早' : `遲到 ${diff} 分鐘`;
         else tooltip = status === 'green' ? '準時或延後下班' : `早退 ${diff} 分鐘`;
       }
-      
-      const isSm = size === 'sm';
-      const containerClass = isSm 
-        ? "inline-flex gap-0.5 bg-slate-800 p-[2px] rounded-full border border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0"
-        : "inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0";
-        
-      const circleClass = isSm
-        ? "w-2 h-2 md:w-2.5 md:h-2.5 print:w-2 print:h-2 rounded-full transition-all duration-300"
-        : "w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300";
-
       return (
-        <div className={`flex items-center ${isSm ? 'gap-0.5' : 'gap-1.5'}`} title={tooltip}>
-          {!hideLabel && <span className={`font-bold text-slate-500 text-right shrink-0 ${isSm ? 'text-[10px] w-4' : 'text-xs w-8'}`}>{label}</span>}
-          <div className={containerClass}>
-            <div className={`${circleClass} ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] print:border print:border-red-800' : 'bg-red-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
-            <div className={`${circleClass} ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse print:border print:border-yellow-600' : 'bg-yellow-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
-            <div className={`${circleClass} ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e] print:border print:border-green-800' : 'bg-green-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+        <div className="flex items-center gap-1.5" title={tooltip}>
+          {!hideLabel && <span className="text-xs font-bold text-slate-500 w-8 text-right shrink-0">{label}</span>}
+          <div className="inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0">
+            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] print:border print:border-red-800' : 'bg-red-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse print:border print:border-yellow-600' : 'bg-yellow-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e] print:border print:border-green-800' : 'bg-green-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
           </div>
         </div>
       );
@@ -506,13 +497,13 @@
                                       <div className="flex justify-between items-center bg-orange-50/50 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
                                          <span className="text-[8px] md:text-[10px] print:text-[10px] text-slate-500 font-bold shrink-0 w-3 md:w-4 print:w-3">上</span>
                                          <span className="text-[10px] md:text-xs print:text-[11px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
-                                         <div className="shrink-0"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} size="sm" /></div>
+                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
                                       </div>
                                       
                                       <div className="flex justify-between items-center bg-teal-50/50 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
                                          <span className="text-[8px] md:text-[10px] print:text-[10px] text-slate-500 font-bold shrink-0 w-3 md:w-4 print:w-3">下</span>
                                          <span className="text-[10px] md:text-xs print:text-[11px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
-                                         <div className="shrink-0"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} size="sm" /></div>
+                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
                                       </div>
                                     </div>
                                   ))}
@@ -538,6 +529,8 @@
                       {filterName && <button onClick={() => setFilterName('')} className="absolute right-3 top-2.5 md:top-4 text-slate-400 hover:text-red-500"><XCircle size={18} className="md:w-5 md:h-5"/></button>}
                     </div>
                     <button onClick={() => exportToExcel('monthly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-4 md:px-6 py-2 md:py-3.5 rounded-xl md:rounded-2xl font-black flex items-center gap-1.5 md:gap-2 transition-colors border-2 border-green-200 text-sm md:text-base"><FileSpreadsheet size={18}/> 匯出全體 Excel</button>
+                    {/* 💡 修復處：在此補上遺漏的列印按鈕 */}
+                    <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-4 md:px-6 py-2 md:py-3.5 rounded-xl md:rounded-2xl font-black flex items-center gap-1.5 md:gap-2 transition-colors border-2 border-orange-200 text-sm md:text-base"><Printer size={18}/> 列印 PDF</button>
                   </div>
                 </div>
                 
@@ -607,7 +600,7 @@
               </div>
             )}
 
-            {/* 🌟 個人專屬月總表 (極限壓縮防裁切 + 單頁列印完美版) 🌟 */}
+            {/* 🌟 個人專屬月總表 (極致壓縮防裁切 + 單頁列印大字體版) 🌟 */}
             {view === 'personal' && (
               <div className="bg-white rounded-2xl md:rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10 flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] print:h-[95vh] print:w-full">
                 <div className="bg-slate-50 print:bg-white p-4 md:p-6 print:p-0 border-b-2 border-slate-200 print:border-none flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 shrink-0">
