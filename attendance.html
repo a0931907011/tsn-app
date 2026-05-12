@@ -40,7 +40,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
     import { 
       Calendar, Clock, CheckCircle2, ChevronLeft, ChevronRight, 
-      UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download
+      UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download, CalendarDays
     } from 'lucide-react';
 
     // 🔐 共用泰膳娘雲端金鑰
@@ -186,7 +186,7 @@
               const recordId = `${shift.empId}_${currentDayKey}_shift${n}`;
               const savedData = attendances[recordId] || {};
               
-              // 兼容舊資料，如果舊資料只有 actualTime，就把它當作 actualStart
+              // 兼容舊資料
               const actualStart = savedData.actualStart || savedData.actualTime || '';
               const actualEnd = savedData.actualEnd || '';
               
@@ -206,9 +206,18 @@
         return records.sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
       }, [shifts, employees, attendances, currentDayKey, base]);
 
+      // 💡 取得「當週」所有日期
       const weekDates = useMemo(() => {
         const d = date.getDay() === 0 ? 7 : date.getDay(); 
         return Array.from({length: 7}, (_, i) => { const x = new Date(date); x.setDate(x.getDate() - d + i + 1); return x; });
+      }, [date]);
+
+      // 💡 取得「當月」所有日期
+      const monthDates = useMemo(() => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        return Array.from({length: daysInMonth}, (_, i) => new Date(year, month, i + 1));
       }, [date]);
 
       // 💡 處理雙輸入框變更
@@ -249,12 +258,16 @@
         showToast("📥 備份下載完成！");
       };
 
-      const exportToExcel = () => {
+      // 💡 匯出 Excel (支援週表與月表)
+      const exportToExcel = (exportView) => {
         let csvContent = '\uFEFF'; 
         csvContent += "日期,星期,員工姓名,據點,排班時段,預定上班,預定下班,實際上班打卡,上班狀態,上班誤差(分),實際下班打卡,下班狀態,下班誤差(分)\n";
+        
         const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
+        const targetDates = exportView === 'monthly' ? monthDates : weekDates;
+
         employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).forEach(emp => {
-          weekDates.forEach(d => {
+          targetDates.forEach(d => {
             const dKey = getDayKey(d);
             const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
             if (shift) {
@@ -287,7 +300,12 @@
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `泰膳娘_週考核表_${weekDates[0].getMonth()+1}月.csv`);
+        
+        const fileName = exportView === 'monthly' 
+          ? `泰膳娘_月考核表_${date.getFullYear()}年${date.getMonth()+1}月.csv` 
+          : `泰膳娘_週考核表_${weekDates[0].getMonth()+1}月.csv`;
+        
+        link.setAttribute("download", fileName);
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
       };
 
@@ -309,9 +327,10 @@
             </div>
             
             <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
-                <button onClick={() => setView('daily')} className={`px-6 py-2.5 rounded-lg text-lg transition-all ${view==='daily'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📝 每日輸入</button>
-                <button onClick={() => setView('weekly')} className={`px-6 py-2.5 rounded-lg text-lg transition-all ${view==='weekly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📊 週考核總表</button>
+              <div className="flex bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200 overflow-x-auto max-w-full">
+                <button onClick={() => setView('daily')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='daily'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📝 每日輸入</button>
+                <button onClick={() => setView('weekly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='weekly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📊 週考核總表</button>
+                <button onClick={() => setView('monthly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='monthly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📅 月考核總表</button>
               </div>
 
               <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
@@ -414,7 +433,7 @@
                       <input type="text" placeholder="🔍 輸入姓名篩選..." value={filterName} onChange={e => setFilterName(e.target.value)} className="border-4 border-slate-200 px-5 py-3 rounded-2xl font-black focus:border-teal-500 outline-none w-56 shadow-inner text-lg"/>
                       {filterName && <button onClick={() => setFilterName('')} className="absolute right-4 top-4 text-slate-400 hover:text-red-500"><XCircle size={20}/></button>}
                     </div>
-                    <button onClick={exportToExcel} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出 Excel</button>
+                    <button onClick={() => exportToExcel('weekly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出 Excel</button>
                     <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-orange-200"><Printer /> 列印 PDF</button>
                   </div>
                 </div>
@@ -444,7 +463,6 @@
                                 if (!start || !end) return null;
                                 const att = attendances[`${emp.id}_${dKey}_shift${n}`] || {};
                                 
-                                // 兼容舊資料
                                 const aStart = att.actualStart || att.actualTime || '';
                                 const aEnd = att.actualEnd || '';
                                 
@@ -473,6 +491,92 @@
                                          <span className="text-[10px] text-slate-500 font-bold shrink-0 w-4">下</span>
                                          <span className="text-xs font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
                                          <div className="scale-[0.65] origin-right w-6"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 🌟 新增：月考核總表視圖 */}
+            {view === 'monthly' && (
+              <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10">
+                <div className="bg-slate-50 print:bg-white p-6 border-b-2 border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div><h2 className="text-3xl font-black flex items-center gap-3 text-slate-800"><CalendarDays className="text-teal-600"/> 員工出勤月考核表 (全月紀錄)</h2><p className="text-slate-500 mt-2 font-bold">{date.getFullYear()}年 {date.getMonth()+1}月</p></div>
+                  <div className="flex items-center gap-4 flex-wrap print:hidden">
+                    <div className="relative">
+                      <input type="text" placeholder="🔍 輸入姓名篩選..." value={filterName} onChange={e => setFilterName(e.target.value)} className="border-4 border-slate-200 px-5 py-3 rounded-2xl font-black focus:border-teal-500 outline-none w-56 shadow-inner text-lg"/>
+                      {filterName && <button onClick={() => setFilterName('')} className="absolute right-4 top-4 text-slate-400 hover:text-red-500"><XCircle size={20}/></button>}
+                    </div>
+                    {/* 💡 傳入 'monthly' 參數，匯出整個月的資料 */}
+                    <button onClick={() => exportToExcel('monthly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出全月 Excel</button>
+                    <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-orange-200"><Printer /> 列印 PDF</button>
+                  </div>
+                </div>
+                
+                {/* 月總表寬度較寬，給予較大的 min-width */}
+                <div className="overflow-x-auto print:overflow-visible p-4 print:p-0">
+                  <table className="w-full text-center border-collapse text-sm print:text-[8px] min-w-[3600px] print:min-w-full">
+                    <thead className="bg-slate-800 text-white print:bg-slate-100 print:text-black">
+                      <tr>
+                        <th className="py-4 px-2 w-24 border border-slate-700 print:border-gray-300 sticky left-0 z-10 bg-slate-800 print:bg-slate-100">員工</th>
+                        {monthDates.map((d, i) => <th key={i} className="py-4 px-2 border border-slate-700 print:border-gray-300 min-w-[130px] print:min-w-[50px]"><div className="text-lg print:text-[10px]">{d.getDate()}</div><div className="text-xs print:text-[8px] opacity-70 print:opacity-100 font-normal">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div></th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).map(emp => {
+                        const hasShiftThisMonth = monthDates.some(d => shifts.some(s => s.empId === emp.id && s.key === getDayKey(d) && s.leaveType === 'work'));
+                        if (!hasShiftThisMonth) return null;
+                        return (
+                          <tr key={emp.id} className="border-b border-slate-200 hover:bg-slate-50">
+                            <td className="py-4 px-2 border border-slate-200 font-black text-lg bg-slate-50 print:bg-transparent sticky left-0 z-10">{emp.name}</td>
+                            {monthDates.map((d, i) => {
+                              const dKey = getDayKey(d);
+                              const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
+                              if (!shift) return <td key={i} className="border border-slate-200 bg-slate-50/50 print:bg-transparent text-slate-300">休</td>;
+                              
+                              const records = [1, 2, 3].map(n => {
+                                const start = shift[`shift${n}Start`];
+                                const end = shift[`shift${n}End`];
+                                if (!start || !end) return null;
+                                const att = attendances[`${emp.id}_${dKey}_shift${n}`] || {};
+                                
+                                const aStart = att.actualStart || att.actualTime || '';
+                                const aEnd = att.actualEnd || '';
+                                
+                                return { 
+                                  start, end, aStart, aEnd, 
+                                  startStatus: att.startStatus, endStatus: att.endStatus, 
+                                  startDiff: att.startDiff, endDiff: att.endDiff 
+                                };
+                              }).filter(Boolean);
+
+                              return (
+                                <td key={i} className="border border-slate-200 p-1.5 align-top">
+                                  {records.map((r, idx) => (
+                                    <div key={idx} className="mb-2 last:mb-0 bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm print:shadow-none flex flex-col items-stretch gap-1.5">
+                                      <div className="text-[10px] print:text-[8px] font-bold text-slate-500 text-center bg-slate-50 rounded py-0.5 border border-slate-100">
+                                        排: {r.start} - {r.end}
+                                      </div>
+                                      
+                                      <div className="flex justify-between items-center bg-orange-50/50 rounded px-1.5 py-1">
+                                         <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-3">上</span>
+                                         <span className="text-xs print:text-[8px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
+                                         <div className="scale-[0.65] print:scale-[0.5] origin-right w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
+                                      </div>
+                                      
+                                      <div className="flex justify-between items-center bg-teal-50/50 rounded px-1.5 py-1">
+                                         <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-3">下</span>
+                                         <span className="text-xs print:text-[8px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
+                                         <div className="scale-[0.65] print:scale-[0.5] origin-right w-6 print:w-4"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
                                       </div>
                                     </div>
                                   ))}
