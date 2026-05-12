@@ -40,7 +40,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
     import { 
       Calendar, Clock, CheckCircle2, ChevronLeft, ChevronRight, 
-      UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download, CalendarDays
+      UserCheck, FileSpreadsheet, Printer, Search, BarChart3, Edit3, XCircle, Lock, LogOut, Download, CalendarDays, User
     } from 'lucide-react';
 
     // 🔐 共用泰膳娘雲端金鑰
@@ -68,10 +68,10 @@
       return (
         <div className="flex items-center gap-1.5" title={tooltip}>
           {!hideLabel && <span className="text-xs font-bold text-slate-500 w-8 text-right shrink-0">{label}</span>}
-          <div className="inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner">
-            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-red-950 opacity-30'}`}></div>
-            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse' : 'bg-yellow-950 opacity-30'}`}></div>
-            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-green-950 opacity-30'}`}></div>
+          <div className="inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent">
+            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] print:border print:border-red-800' : 'bg-red-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse print:border print:border-yellow-600' : 'bg-yellow-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e] print:border print:border-green-800' : 'bg-green-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
           </div>
         </div>
       );
@@ -94,7 +94,7 @@
       const handleLogin = async () => {
         setIsLoadingAuth(true);
         const pwd = document.getElementById('pwd-input').value;
-        let adminPwd = "tsn168"; // 預設密碼
+        let adminPwd = "tsn168"; 
         try {
           const authDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth'));
           if (authDoc.exists() && authDoc.data().admin) adminPwd = authDoc.data().admin;
@@ -127,10 +127,11 @@
       const [employees, setEmployees] = useState([]);
       const [shifts, setShifts] = useState([]);
       const [attendances, setAttendances] = useState({});
-      const [date, setDate] = useState(new Date(2026, 3, 16));
+      const [date, setDate] = useState(new Date());
       const [toast, setToast] = useState('');
       const [view, setView] = useState('daily'); 
       const [filterName, setFilterName] = useState(''); 
+      const [selectedEmpId, setSelectedEmpId] = useState(''); // 💡 新增：個人月總表專用選擇器
       const base = localStorage.getItem('tsn_base') || '0931907011';
 
       useEffect(() => {
@@ -144,6 +145,15 @@
         });
         return () => { u1(); u2(); u3(); };
       }, []);
+
+      const fEmployees = useMemo(() => employees.filter(e => e.base === base), [employees, base]);
+
+      // 初始化選擇第一位員工
+      useEffect(() => {
+        if (fEmployees.length > 0 && !selectedEmpId) {
+          setSelectedEmpId(fEmployees[0].id);
+        }
+      }, [fEmployees, selectedEmpId]);
 
       const getDayKey = (d) => `${d.getFullYear()}_${d.getMonth() + 1}_${d.getDate()}`;
       const currentDayKey = getDayKey(date);
@@ -176,7 +186,7 @@
         const records = [];
         const todayShifts = shifts.filter(s => s.key === currentDayKey && s.leaveType === 'work' && s.base === base);
         todayShifts.forEach(shift => {
-          const emp = employees.find(e => e.id === shift.empId);
+          const emp = fEmployees.find(e => e.id === shift.empId);
           if (!emp) return;
           [1, 2, 3].forEach(n => {
             const start = shift[`shift${n}Start`];
@@ -186,7 +196,6 @@
               const recordId = `${shift.empId}_${currentDayKey}_shift${n}`;
               const savedData = attendances[recordId] || {};
               
-              // 兼容舊資料
               const actualStart = savedData.actualStart || savedData.actualTime || '';
               const actualEnd = savedData.actualEnd || '';
               
@@ -204,7 +213,7 @@
           });
         });
         return records.sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
-      }, [shifts, employees, attendances, currentDayKey, base]);
+      }, [shifts, fEmployees, attendances, currentDayKey, base]);
 
       // 💡 取得「當週」所有日期
       const weekDates = useMemo(() => {
@@ -258,15 +267,19 @@
         showToast("📥 備份下載完成！");
       };
 
-      // 💡 匯出 Excel (支援週表與月表)
+      // 💡 匯出 Excel (支援週表、月表、個人月表)
       const exportToExcel = (exportView) => {
         let csvContent = '\uFEFF'; 
         csvContent += "日期,星期,員工姓名,據點,排班時段,預定上班,預定下班,實際上班打卡,上班狀態,上班誤差(分),實際下班打卡,下班狀態,下班誤差(分)\n";
         
         const weekMap = ['日', '一', '二', '三', '四', '五', '六'];
-        const targetDates = exportView === 'monthly' ? monthDates : weekDates;
+        const targetDates = (exportView === 'monthly' || exportView === 'personal') ? monthDates : weekDates;
+        
+        const empsToExport = exportView === 'personal' 
+          ? fEmployees.filter(emp => emp.id === selectedEmpId)
+          : fEmployees.filter(emp => !filterName || emp.name.includes(filterName));
 
-        employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).forEach(emp => {
+        empsToExport.forEach(emp => {
           targetDates.forEach(d => {
             const dKey = getDayKey(d);
             const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
@@ -302,7 +315,9 @@
         link.setAttribute("href", url);
         
         const fileName = exportView === 'monthly' 
-          ? `泰膳娘_月考核表_${date.getFullYear()}年${date.getMonth()+1}月.csv` 
+          ? `泰膳娘_全體月考核表_${date.getFullYear()}年${date.getMonth()+1}月.csv` 
+          : exportView === 'personal'
+          ? `泰膳娘_個人月考核表_${fEmployees.find(e=>e.id===selectedEmpId)?.name}_${date.getFullYear()}年${date.getMonth()+1}月.csv`
           : `泰膳娘_週考核表_${weekDates[0].getMonth()+1}月.csv`;
         
         link.setAttribute("download", fileName);
@@ -318,7 +333,7 @@
           )}
 
           <nav className="bg-white p-6 shadow-md flex flex-col md:flex-row justify-between items-center sticky top-0 z-40 border-b-4 border-teal-600 print:hidden gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 shrink-0">
               <div className="p-3 bg-teal-600 rounded-2xl text-white shadow-lg"><UserCheck size={32}/></div>
               <div>
                 <h1 className="text-3xl font-black text-slate-800">打卡與考核系統</h1>
@@ -326,11 +341,13 @@
               </div>
             </div>
             
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-4 flex-wrap w-full md:w-auto justify-center">
+              {/* 💡 導覽列加入「個人月表」 */}
               <div className="flex bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200 overflow-x-auto max-w-full">
-                <button onClick={() => setView('daily')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='daily'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📝 每日輸入</button>
-                <button onClick={() => setView('weekly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='weekly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📊 週考核總表</button>
-                <button onClick={() => setView('monthly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='monthly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📅 月考核總表</button>
+                <button onClick={() => setView('daily')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='daily'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📝 每日</button>
+                <button onClick={() => setView('weekly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='weekly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📊 週表</button>
+                <button onClick={() => setView('monthly')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='monthly'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>📅 全體月表</button>
+                <button onClick={() => setView('personal')} className={`px-4 md:px-6 py-2.5 rounded-lg text-sm md:text-lg transition-all whitespace-nowrap ${view==='personal'?'bg-white text-teal-700 shadow-md':'text-slate-500 hover:text-teal-600'}`}>👤 個人月表</button>
               </div>
 
               <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-xl shadow-inner border border-slate-200">
@@ -385,7 +402,6 @@
                             <td className="py-4 px-4"><div className="text-2xl font-black text-slate-800">{record.name}</div><div className="text-sm text-slate-400 mt-1">{record.role}</div></td>
                             <td className="py-4 px-4"><span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg text-sm">{record.loc}</span><div className="text-slate-500 mt-2 text-sm">{record.segmentName}</div></td>
                             
-                            {/* 💡 顯示自動抓取的上下班時間 */}
                             <td className="py-4 px-4">
                               <div className="flex flex-col items-center justify-center gap-1">
                                  <div className="text-2xl font-mono text-teal-700 font-black tracking-widest">{record.scheduledStart}</div>
@@ -394,7 +410,6 @@
                               </div>
                             </td>
                             
-                            {/* 💡 雙輸入框：上班與下班 */}
                             <td className="py-4 px-4 bg-orange-50/30 border-x border-orange-100/50">
                               <div className="flex flex-col gap-3 items-center w-full max-w-[220px] mx-auto">
                                 <div className="flex items-center gap-2 w-full">
@@ -408,7 +423,6 @@
                               </div>
                             </td>
                             
-                            {/* 💡 雙向判定燈號 */}
                             <td className="py-4 px-4">
                               <div className="flex flex-col gap-4 items-center justify-center">
                                 <TrafficLight label="上班" status={record.startStatus} diff={record.startDiff} type="start" />
@@ -438,24 +452,24 @@
                   </div>
                 </div>
                 <div className="overflow-x-auto print:overflow-visible p-4 print:p-0">
-                  <table className="w-full text-center border-collapse text-sm print:text-xs min-w-[1200px]">
+                  <table className="w-full text-center border-collapse text-sm print:text-[9px] min-w-[1200px] print:min-w-full">
                     <thead className="bg-slate-800 text-white print:bg-slate-100 print:text-black">
                       <tr>
                         <th className="py-4 px-2 w-24 border border-slate-700 print:border-gray-300">員工</th>
-                        {weekDates.map((d, i) => <th key={i} className="py-4 px-2 border border-slate-700 print:border-gray-300 min-w-[130px]"><div className="text-lg">{d.getDate()}</div><div className="text-xs opacity-70 print:opacity-100 font-normal">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div></th>)}
+                        {weekDates.map((d, i) => <th key={i} className="py-4 px-2 border border-slate-700 print:border-gray-300 min-w-[130px] print:min-w-0"><div className="text-lg print:text-[10px]">{d.getDate()}</div><div className="text-xs print:text-[8px] opacity-70 print:opacity-100 font-normal">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div></th>)}
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).map(emp => {
+                      {fEmployees.filter(emp => !filterName || emp.name.includes(filterName)).map(emp => {
                         const hasShiftThisWeek = weekDates.some(d => shifts.some(s => s.empId === emp.id && s.key === getDayKey(d) && s.leaveType === 'work'));
                         if (!hasShiftThisWeek) return null;
                         return (
                           <tr key={emp.id} className="border-b border-slate-200 hover:bg-slate-50">
-                            <td className="py-4 px-2 border border-slate-200 font-black text-lg bg-slate-50 print:bg-transparent">{emp.name}</td>
+                            <td className="py-4 px-2 border border-slate-200 font-black text-lg print:text-xs bg-slate-50 print:bg-transparent">{emp.name}</td>
                             {weekDates.map((d, i) => {
                               const dKey = getDayKey(d);
                               const shift = shifts.find(s => s.empId === emp.id && s.key === dKey && s.leaveType === 'work');
-                              if (!shift) return <td key={i} className="border border-slate-200 bg-slate-50/50 print:bg-transparent text-slate-300">休</td>;
+                              if (!shift) return <td key={i} className="border border-slate-200 bg-slate-50/50 print:bg-transparent text-slate-300 print:text-gray-400">休</td>;
                               
                               const records = [1, 2, 3].map(n => {
                                 const start = shift[`shift${n}Start`];
@@ -474,23 +488,23 @@
                               }).filter(Boolean);
 
                               return (
-                                <td key={i} className="border border-slate-200 p-1.5 align-top">
+                                <td key={i} className="border border-slate-200 p-1.5 print:p-0.5 align-top">
                                   {records.map((r, idx) => (
-                                    <div key={idx} className="mb-2 last:mb-0 bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm print:shadow-none flex flex-col items-stretch gap-1.5">
-                                      <div className="text-[10px] font-bold text-slate-500 text-center bg-slate-50 rounded py-0.5 border border-slate-100">
+                                    <div key={idx} className="mb-2 print:mb-1 last:mb-0 bg-white border border-slate-200 print:border-gray-200 rounded-xl print:rounded p-1.5 print:p-1 shadow-sm print:shadow-none flex flex-col items-stretch gap-1.5 print:gap-0.5">
+                                      <div className="text-[10px] print:text-[7px] font-bold text-slate-500 text-center bg-slate-50 print:bg-gray-50 rounded py-0.5 border border-slate-100 print:border-none">
                                         排: {r.start} - {r.end}
                                       </div>
                                       
-                                      <div className="flex justify-between items-center bg-orange-50/50 rounded px-1.5 py-1">
-                                         <span className="text-[10px] text-slate-500 font-bold shrink-0 w-4">上</span>
-                                         <span className="text-xs font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
-                                         <div className="scale-[0.65] origin-right w-6"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
+                                      <div className="flex justify-between items-center bg-orange-50/50 print:bg-transparent rounded px-1.5 py-1 print:py-0">
+                                         <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-4 print:w-3">上</span>
+                                         <span className="text-xs print:text-[7px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
+                                         <div className="scale-[0.65] print:scale-[0.4] origin-right w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
                                       </div>
                                       
-                                      <div className="flex justify-between items-center bg-teal-50/50 rounded px-1.5 py-1">
-                                         <span className="text-[10px] text-slate-500 font-bold shrink-0 w-4">下</span>
-                                         <span className="text-xs font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
-                                         <div className="scale-[0.65] origin-right w-6"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
+                                      <div className="flex justify-between items-center bg-teal-50/50 print:bg-transparent rounded px-1.5 py-1 print:py-0">
+                                         <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-4 print:w-3">下</span>
+                                         <span className="text-xs print:text-[7px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
+                                         <div className="scale-[0.65] print:scale-[0.4] origin-right w-6 print:w-4"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
                                       </div>
                                     </div>
                                   ))}
@@ -506,23 +520,19 @@
               </div>
             )}
 
-            {/* 🌟 新增：月考核總表視圖 */}
             {view === 'monthly' && (
               <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10">
                 <div className="bg-slate-50 print:bg-white p-6 border-b-2 border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div><h2 className="text-3xl font-black flex items-center gap-3 text-slate-800"><CalendarDays className="text-teal-600"/> 員工出勤月考核表 (全月紀錄)</h2><p className="text-slate-500 mt-2 font-bold">{date.getFullYear()}年 {date.getMonth()+1}月</p></div>
+                  <div><h2 className="text-3xl font-black flex items-center gap-3 text-slate-800"><CalendarDays className="text-teal-600"/> 員工出勤全體月考核表</h2><p className="text-slate-500 mt-2 font-bold">{date.getFullYear()}年 {date.getMonth()+1}月</p></div>
                   <div className="flex items-center gap-4 flex-wrap print:hidden">
                     <div className="relative">
                       <input type="text" placeholder="🔍 輸入姓名篩選..." value={filterName} onChange={e => setFilterName(e.target.value)} className="border-4 border-slate-200 px-5 py-3 rounded-2xl font-black focus:border-teal-500 outline-none w-56 shadow-inner text-lg"/>
                       {filterName && <button onClick={() => setFilterName('')} className="absolute right-4 top-4 text-slate-400 hover:text-red-500"><XCircle size={20}/></button>}
                     </div>
-                    {/* 💡 傳入 'monthly' 參數，匯出整個月的資料 */}
-                    <button onClick={() => exportToExcel('monthly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出全月 Excel</button>
-                    <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-orange-200"><Printer /> 列印 PDF</button>
+                    <button onClick={() => exportToExcel('monthly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出全體 Excel</button>
                   </div>
                 </div>
                 
-                {/* 月總表寬度較寬，給予較大的 min-width */}
                 <div className="overflow-x-auto print:overflow-visible p-4 print:p-0">
                   <table className="w-full text-center border-collapse text-sm print:text-[8px] min-w-[3600px] print:min-w-full">
                     <thead className="bg-slate-800 text-white print:bg-slate-100 print:text-black">
@@ -532,7 +542,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.filter(emp => emp.base === base && (!filterName || emp.name.includes(filterName))).map(emp => {
+                      {fEmployees.filter(emp => !filterName || emp.name.includes(filterName)).map(emp => {
                         const hasShiftThisMonth = monthDates.some(d => shifts.some(s => s.empId === emp.id && s.key === getDayKey(d) && s.leaveType === 'work'));
                         if (!hasShiftThisMonth) return null;
                         return (
@@ -549,11 +559,10 @@
                                 if (!start || !end) return null;
                                 const att = attendances[`${emp.id}_${dKey}_shift${n}`] || {};
                                 
-                                const aStart = att.actualStart || att.actualTime || '';
-                                const aEnd = att.actualEnd || '';
-                                
                                 return { 
-                                  start, end, aStart, aEnd, 
+                                  start, end, 
+                                  aStart: att.actualStart || att.actualTime || '', 
+                                  aEnd: att.actualEnd || '', 
                                   startStatus: att.startStatus, endStatus: att.endStatus, 
                                   startDiff: att.startDiff, endDiff: att.endDiff 
                                 };
@@ -566,13 +575,11 @@
                                       <div className="text-[10px] print:text-[8px] font-bold text-slate-500 text-center bg-slate-50 rounded py-0.5 border border-slate-100">
                                         排: {r.start} - {r.end}
                                       </div>
-                                      
                                       <div className="flex justify-between items-center bg-orange-50/50 rounded px-1.5 py-1">
                                          <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-3">上</span>
                                          <span className="text-xs print:text-[8px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
                                          <div className="scale-[0.65] print:scale-[0.5] origin-right w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
                                       </div>
-                                      
                                       <div className="flex justify-between items-center bg-teal-50/50 rounded px-1.5 py-1">
                                          <span className="text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-3">下</span>
                                          <span className="text-xs print:text-[8px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
@@ -588,6 +595,108 @@
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* 🌟 新增：個人專屬月總表 (日曆排版) 🌟 */}
+            {view === 'personal' && (
+              <div className="bg-white rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10">
+                <div className="bg-slate-50 print:bg-white p-6 border-b-2 border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="text-3xl font-black flex items-center gap-3 text-slate-800">
+                      <User className="text-teal-600" size={32}/> 個人出勤月考核表
+                    </h2>
+                    <p className="text-slate-500 mt-2 font-bold">{date.getFullYear()}年 {date.getMonth()+1}月</p>
+                  </div>
+                  <div className="flex items-center gap-4 flex-wrap print:hidden">
+                    <select
+                      value={selectedEmpId}
+                      onChange={e => setSelectedEmpId(e.target.value)}
+                      className="border-4 border-slate-200 px-5 py-3 rounded-2xl font-black focus:border-teal-500 outline-none w-56 shadow-inner text-lg bg-white"
+                    >
+                      {fEmployees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
+                    </select>
+                    <button onClick={() => exportToExcel('personal')} className="bg-green-100 text-green-700 hover:bg-green-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-green-200"><FileSpreadsheet /> 匯出個人 Excel</button>
+                    <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-colors border-2 border-orange-200"><Printer /> 列印 PDF</button>
+                  </div>
+                </div>
+
+                {/* 日曆網格排版：完美符合 A4 與電腦單一畫面 */}
+                <div className="p-6 print:p-0">
+                  <div className="hidden print:block text-center mb-4">
+                    <h2 className="text-2xl font-black">{fEmployees.find(e => e.id === selectedEmpId)?.name} - {date.getFullYear()}年{date.getMonth()+1}月 出勤紀錄</h2>
+                  </div>
+                  
+                  <div className="grid grid-cols-7 gap-3 md:gap-4 print:gap-1">
+                    {/* 星期標題 */}
+                    {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+                      <div key={d} className="text-center font-black bg-slate-800 text-white print:bg-slate-200 print:text-black py-2.5 rounded-xl print:rounded-none text-sm print:text-[10px]">星期{d}</div>
+                    ))}
+                    
+                    {/* 月初空白天數填補 */}
+                    {Array.from({ length: (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => (
+                      <div key={`empty-${i}`} className="bg-slate-50/50 print:bg-transparent rounded-xl print:rounded-none" />
+                    ))}
+
+                    {/* 該月天數 */}
+                    {monthDates.map((d, i) => {
+                      const dKey = getDayKey(d);
+                      const shift = shifts.find(s => s.empId === selectedEmpId && s.key === dKey && s.leaveType === 'work');
+                      const records = [];
+                      if (shift) {
+                        [1, 2, 3].forEach(n => {
+                          const start = shift[`shift${n}Start`];
+                          const end = shift[`shift${n}End`];
+                          if (start && end) {
+                            const att = attendances[`${selectedEmpId}_${dKey}_shift${n}`] || {};
+                            records.push({
+                              start, end, loc: shift[`shift${n}Loc`],
+                              aStart: att.actualStart || att.actualTime || '',
+                              aEnd: att.actualEnd || '',
+                              startStatus: att.startStatus, endStatus: att.endStatus,
+                              startDiff: att.startDiff, endDiff: att.endDiff
+                            });
+                          }
+                        });
+                      }
+
+                      const now = new Date();
+                      const isToday = now.getFullYear() === d.getFullYear() && now.getMonth() === d.getMonth() && now.getDate() === d.getDate();
+
+                      return (
+                        <div key={i} className={`border-2 print:border-gray-300 print:border rounded-2xl print:rounded-none p-3 print:p-1 flex flex-col min-h-[160px] print:min-h-[110px] transition-all hover:border-teal-300 shadow-sm print:shadow-none ${isToday ? 'border-teal-400 bg-teal-50/30' : 'border-slate-100 bg-white'}`}>
+                          <div className="flex justify-between items-center mb-2 print:mb-1 border-b print:border-gray-200 pb-1 print:pb-0">
+                            <span className={`text-xl print:text-sm font-black ${isToday ? 'text-teal-600' : 'text-slate-600 print:text-black'}`}>{d.getDate()}</span>
+                          </div>
+                          
+                          <div className="flex-1 flex flex-col gap-2 print:gap-1">
+                            {records.length > 0 ? records.map((r, idx) => (
+                              <div key={idx} className="bg-slate-50 print:bg-white border border-slate-200 print:border-gray-200 rounded-xl p-2 print:p-1 shadow-sm print:shadow-none flex flex-col gap-1.5 print:gap-1">
+                                <div className="text-[11px] print:text-[8px] font-bold text-slate-600 text-center bg-white print:bg-slate-100 rounded border border-slate-200 print:border-gray-200 py-0.5 px-1 truncate">
+                                  {r.loc} {r.start}-{r.end}
+                                </div>
+                                <div className="flex justify-between items-center bg-orange-50/50 print:bg-transparent rounded px-1.5 py-0.5">
+                                   <span className="text-[10px] print:text-[7px] text-slate-500 font-bold shrink-0 w-3 print:w-2">上</span>
+                                   <span className="text-xs print:text-[8px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
+                                   <div className="scale-[0.55] print:scale-[0.4] origin-right w-5 print:w-3"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
+                                </div>
+                                <div className="flex justify-between items-center bg-teal-50/50 print:bg-transparent rounded px-1.5 py-0.5">
+                                   <span className="text-[10px] print:text-[7px] text-slate-500 font-bold shrink-0 w-3 print:w-2">下</span>
+                                   <span className="text-xs print:text-[8px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
+                                   <div className="scale-[0.55] print:scale-[0.4] origin-right w-5 print:w-3"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
+                                </div>
+                              </div>
+                            )) : (
+                              <div className="flex-1 flex items-center justify-center opacity-30">
+                                <span className="text-4xl print:text-xl font-black text-slate-400">休</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
