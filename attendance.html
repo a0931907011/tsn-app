@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>泰膳娘 - 出勤考核紅綠燈 (完美對齊版)</title>
+  <title>泰膳娘 - 出勤考核紅綠燈 (雙軌完美排版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="importmap">
@@ -63,20 +63,30 @@
     const db = getFirestore(app);
     const appId = 'tsn-official-app'; 
 
-    // 🚦 紅綠燈 UI 元件 
-    const TrafficLight = ({ label, status, diff, type, hideLabel = false }) => {
+    // 🚦 紅綠燈 UI 元件 (💡 包含 sm 尺寸，徹底解決裁切問題)
+    const TrafficLight = ({ label, status, diff, type, hideLabel = false, size = 'normal' }) => {
       let tooltip = '尚未打卡';
       if (status !== 'none' && status) {
         if (type === 'start') tooltip = status === 'green' ? '準時或提早' : `遲到 ${diff} 分鐘`;
         else tooltip = status === 'green' ? '準時或延後下班' : `早退 ${diff} 分鐘`;
       }
+      
+      const isSm = size === 'sm';
+      const containerClass = isSm 
+        ? "inline-flex gap-0.5 bg-slate-800 p-[2px] rounded-full border border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0"
+        : "inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0";
+        
+      const circleClass = isSm
+        ? "w-2 h-2 md:w-2.5 md:h-2.5 print:w-2 print:h-2 rounded-full transition-all duration-300"
+        : "w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300";
+
       return (
-        <div className="flex items-center gap-1.5" title={tooltip}>
-          {!hideLabel && <span className="text-xs font-bold text-slate-500 w-8 text-right shrink-0">{label}</span>}
-          <div className="inline-flex gap-1 bg-slate-800 p-1.5 rounded-full border-2 border-slate-700 shadow-inner print:border-none print:shadow-none print:bg-transparent print:p-0">
-            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] print:border print:border-red-800' : 'bg-red-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
-            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse print:border print:border-yellow-600' : 'bg-yellow-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
-            <div className={`w-3.5 h-3.5 print:w-3 print:h-3 rounded-full transition-all duration-300 ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e] print:border print:border-green-800' : 'bg-green-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+        <div className={`flex items-center ${isSm ? 'gap-0.5' : 'gap-1.5'}`} title={tooltip}>
+          {!hideLabel && <span className={`font-bold text-slate-500 text-right shrink-0 ${isSm ? 'text-[10px] w-4' : 'text-xs w-8'}`}>{label}</span>}
+          <div className={containerClass}>
+            <div className={`${circleClass} ${status === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] print:border print:border-red-800' : 'bg-red-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`${circleClass} ${status === 'yellow' ? 'bg-yellow-400 shadow-[0_0_8px_#facc15] animate-pulse print:border print:border-yellow-600' : 'bg-yellow-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
+            <div className={`${circleClass} ${status === 'green' ? 'bg-green-500 shadow-[0_0_8px_#22c55e] print:border print:border-green-800' : 'bg-green-950 opacity-30 print:bg-gray-200 print:opacity-100 print:border print:border-gray-300'}`}></div>
           </div>
         </div>
       );
@@ -494,16 +504,16 @@
                                         排: {r.start} - {r.end}
                                       </div>
                                       
-                                      <div className="flex justify-between items-center bg-orange-50/50 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
+                                      <div className="flex justify-between items-center bg-orange-50/80 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
                                          <span className="text-[8px] md:text-[10px] print:text-[10px] text-slate-500 font-bold shrink-0 w-3 md:w-4 print:w-3">上</span>
                                          <span className="text-[10px] md:text-xs print:text-[11px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
-                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} /></div>
+                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} size="sm" /></div>
                                       </div>
                                       
-                                      <div className="flex justify-between items-center bg-teal-50/50 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
+                                      <div className="flex justify-between items-center bg-teal-50/80 print:bg-transparent rounded px-1 md:px-1.5 py-0.5 md:py-1 print:py-0">
                                          <span className="text-[8px] md:text-[10px] print:text-[10px] text-slate-500 font-bold shrink-0 w-3 md:w-4 print:w-3">下</span>
                                          <span className="text-[10px] md:text-xs print:text-[11px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
-                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} /></div>
+                                         <div className="scale-[0.5] md:scale-[0.65] print:scale-[0.5] origin-right w-4 md:w-6 print:w-4"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} size="sm" /></div>
                                       </div>
                                     </div>
                                   ))}
@@ -529,7 +539,6 @@
                       {filterName && <button onClick={() => setFilterName('')} className="absolute right-3 top-2.5 md:top-4 text-slate-400 hover:text-red-500"><XCircle size={18} className="md:w-5 md:h-5"/></button>}
                     </div>
                     <button onClick={() => exportToExcel('monthly')} className="bg-green-100 text-green-700 hover:bg-green-200 px-4 md:px-6 py-2 md:py-3.5 rounded-xl md:rounded-2xl font-black flex items-center gap-1.5 md:gap-2 transition-colors border-2 border-green-200 text-sm md:text-base"><FileSpreadsheet size={18}/> 匯出全體 Excel</button>
-                    {/* 💡 修復處：在此補上遺漏的列印按鈕 */}
                     <button onClick={() => window.print()} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-4 md:px-6 py-2 md:py-3.5 rounded-xl md:rounded-2xl font-black flex items-center gap-1.5 md:gap-2 transition-colors border-2 border-orange-200 text-sm md:text-base"><Printer size={18}/> 列印 PDF</button>
                   </div>
                 </div>
@@ -561,7 +570,7 @@
                                 const att = attendances[`${emp.id}_${dKey}_shift${n}`] || {};
                                 
                                 return { 
-                                  start, end, 
+                                  start, end, loc: shift[`shift${n}Loc`],
                                   aStart: att.actualStart || att.actualTime || '', 
                                   aEnd: att.actualEnd || '', 
                                   startStatus: att.startStatus, endStatus: att.endStatus, 
@@ -576,12 +585,12 @@
                                       <div className="text-[8px] md:text-[10px] print:text-[8px] font-bold text-slate-500 text-center bg-slate-50 rounded py-0.5 border border-slate-100">
                                         排: {r.start} - {r.end}
                                       </div>
-                                      <div className="flex justify-between items-center bg-orange-50/50 rounded px-1 md:px-1.5 py-0.5 md:py-1">
+                                      <div className="flex justify-between items-center bg-orange-50/80 rounded px-1 md:px-1.5 py-0.5 md:py-1">
                                          <span className="text-[8px] md:text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-2.5 md:w-3">上</span>
                                          <span className="text-[10px] md:text-xs print:text-[8px] font-black text-orange-600 tracking-wider flex-1 text-center">{r.aStart || '--:--'}</span>
                                          <div className="shrink-0"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} size="sm" /></div>
                                       </div>
-                                      <div className="flex justify-between items-center bg-teal-50/50 rounded px-1 md:px-1.5 py-0.5 md:py-1">
+                                      <div className="flex justify-between items-center bg-teal-50/80 rounded px-1 md:px-1.5 py-0.5 md:py-1">
                                          <span className="text-[8px] md:text-[10px] print:text-[6px] text-slate-500 font-bold shrink-0 w-2.5 md:w-3">下</span>
                                          <span className="text-[10px] md:text-xs print:text-[8px] font-black text-teal-600 tracking-wider flex-1 text-center">{r.aEnd || '--:--'}</span>
                                          <div className="shrink-0"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} size="sm" /></div>
@@ -600,7 +609,7 @@
               </div>
             )}
 
-            {/* 🌟 個人專屬月總表 (極致壓縮防裁切 + 單頁列印大字體版) 🌟 */}
+            {/* 🌟 個人專屬月總表 (極致壓縮防裁切 + 雙軌排版) 🌟 */}
             {view === 'personal' && (
               <div className="bg-white rounded-2xl md:rounded-[3rem] print:rounded-none shadow-2xl print-shadow-none border-2 border-slate-100 print:border-none overflow-hidden animate-in fade-in slide-in-from-bottom-10 flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-160px)] print:h-[95vh] print:w-full">
                 <div className="bg-slate-50 print:bg-white p-4 md:p-6 print:p-0 border-b-2 border-slate-200 print:border-none flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 shrink-0">
@@ -623,21 +632,21 @@
                   </div>
                 </div>
 
-                {/* 💡 日曆網格排版：極限防裁切、大幅字體放大 */}
+                {/* 💡 日曆網格排版：極限防裁切、雙軌縮放 */}
                 <div className="p-3 md:p-6 print:p-0 flex-1 flex flex-col min-h-0">
                   <div className="hidden print:block text-center mb-1 shrink-0 border-b-2 border-slate-300 pb-1">
                     <h2 className="text-2xl print:text-3xl font-black tracking-wide">{fEmployees.find(e => e.id === selectedEmpId)?.name} - {date.getFullYear()}年{date.getMonth()+1}月 出勤紀錄</h2>
                   </div>
                   
                   {/* 💡 星期標題獨立，並縮小下邊界 margin 保證緊湊 */}
-                  <div className="grid grid-cols-7 gap-1.5 md:gap-2 print:gap-[2px] mb-0.5 md:mb-1 print:mb-[2px] shrink-0">
+                  <div className="grid grid-cols-7 gap-1.5 md:gap-2 print:gap-[2px] mb-1.5 md:mb-2 print:mb-[2px] shrink-0">
                     {['一', '二', '三', '四', '五', '六', '日'].map(d => (
                       <div key={d} className="text-center font-black bg-slate-800 text-white print:bg-slate-200 print:text-black py-1 md:py-1.5 print:py-0.5 rounded-lg print:rounded-sm text-xs md:text-sm print:text-[12px]">星期{d}</div>
                     ))}
                   </div>
 
-                  {/* 💡 日曆天數網格：取消多餘的 gap 與 padding，將版面完全留給格子 */}
-                  <div className="flex-1 grid grid-cols-7 gap-1 md:gap-1.5 print:gap-[2px] auto-rows-[minmax(0,1fr)] min-h-0 overflow-y-auto print:overflow-hidden calendar-cell-scroll">
+                  {/* 💡 日曆天數網格：採用 print: 壓縮，螢幕保持漂亮留白 */}
+                  <div className="flex-1 grid grid-cols-7 gap-1 md:gap-1.5 print:gap-[2px] auto-rows-[minmax(0,1fr)] min-h-0 overflow-y-auto print:overflow-hidden calendar-cell-scroll p-1 print:p-0">
                     {Array.from({ length: (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => (
                       <div key={`empty-${i}`} className="bg-slate-50/50 print:bg-gray-50 rounded-lg print:rounded-none border-0 print:border print:border-gray-200" />
                     ))}
@@ -667,35 +676,41 @@
                       const isToday = now.getFullYear() === d.getFullYear() && now.getMonth() === d.getMonth() && now.getDate() === d.getDate();
 
                       return (
-                        <div key={i} className={`border-2 print:border-gray-300 print:border rounded-xl print:rounded-sm p-1 print:p-[1px] flex flex-col min-h-0 transition-all hover:border-teal-300 shadow-sm print:shadow-none overflow-hidden ${isToday ? 'border-teal-400 bg-teal-50/30 print:bg-transparent' : 'border-slate-100 bg-white'}`}>
-                          <div className="flex justify-between items-center border-b print:border-gray-300 shrink-0 mb-0.5 print:mb-0 pb-0.5 print:pb-0">
-                            {/* 💡 日期字體縮小留白，但字體依然大 */}
+                        <div key={i} className={`border-2 print:border-gray-300 print:border rounded-xl print:rounded-sm p-1 lg:p-1.5 print:p-[1px] flex flex-col min-h-0 transition-all hover:border-teal-300 shadow-sm print:shadow-none overflow-hidden ${isToday ? 'border-teal-400 bg-teal-50/30 print:bg-transparent' : 'border-slate-100 bg-white'}`}>
+                          
+                          {/* 💡 日期標題：縮短高度，移除 mb，改用 pb */}
+                          <div className="flex justify-between items-center border-b print:border-gray-300 shrink-0 mb-1 print:mb-0 pb-0.5 print:pb-0">
                             <span className={`text-base lg:text-lg print:text-[14px] font-black leading-none ${isToday ? 'text-teal-600' : 'text-slate-600 print:text-black'}`}>{d.getDate()}</span>
                           </div>
                           
                           <div className="flex-1 flex flex-col gap-0.5 print:gap-[1px] mt-0.5 print:mt-0 overflow-y-auto print:overflow-hidden calendar-cell-scroll">
                             {records.length > 0 ? records.map((r, idx) => (
-                              <div key={idx} className="bg-slate-50 print:bg-white border border-slate-200 print:border-gray-300 rounded-md p-0.5 print:p-0 shadow-sm print:shadow-none flex flex-col gap-0.5 print:gap-[1px]">
-                                {/* 💡 班別內容字體全面放大，壓縮行距 */}
-                                <div className="text-[10px] lg:text-[11px] print:text-[11px] font-bold text-slate-600 print:text-black text-center bg-white print:bg-slate-100 rounded border border-slate-200 print:border-gray-300 py-0 px-1 truncate leading-none">
-                                  {r.loc} {r.start}-{r.end}
+                              
+                              /* 💡 恢復漂亮的卡片排版，但保留 print: 壓縮 */
+                              <div key={idx} className="bg-white print:bg-white border border-slate-200 print:border-gray-300 rounded-lg print:rounded-md p-1.5 lg:p-2 print:p-0 shadow-sm print:shadow-none flex flex-col gap-1.5 print:gap-[1px]">
+                                
+                                {/* 排班時間 */}
+                                <div className="text-[10px] lg:text-[11px] print:text-[11px] font-bold text-slate-500 print:text-black text-center bg-slate-50 print:bg-slate-100 rounded border border-slate-100 print:border-gray-300 py-1 print:py-0 px-1 truncate leading-none print:leading-tight">
+                                  排: {r.start} - {r.end}
                                 </div>
-                                <div className="flex justify-between items-center bg-orange-50/50 print:bg-transparent rounded px-1 py-0 print:px-1">
-                                   <span className="text-[9px] lg:text-[10px] print:text-[11px] text-slate-500 font-bold shrink-0 w-3 print:w-3 leading-none">上</span>
-                                   <span className="text-[10px] lg:text-xs print:text-[13px] font-black text-orange-600 print:text-black tracking-wider flex-1 text-center leading-none">{r.aStart || '--:--'}</span>
-                                   {/* 💡 使用原生 sm 紅綠燈組件，不再用 scale 導致裁切 */}
-                                   <div className="shrink-0"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} size="sm" /></div>
+                                
+                                {/* 實際上班 */}
+                                <div className="flex justify-between items-center bg-orange-50/80 print:bg-transparent rounded px-1.5 py-1 print:px-1 print:py-0">
+                                   <span className="text-[10px] lg:text-[11px] print:text-[11px] text-slate-500 font-bold shrink-0 w-3 print:w-3 leading-none">上</span>
+                                   <span className="text-[11px] lg:text-[13px] print:text-[13px] font-black text-orange-600 print:text-black tracking-wider flex-1 text-center leading-none">{r.aStart || '--:--'}</span>
+                                   <div className="shrink-0 scale-[0.65] lg:scale-[0.75] print:scale-[0.55] origin-right w-5 print:w-5"><TrafficLight status={r.startStatus || 'none'} diff={r.startDiff} type="start" hideLabel={true} size="sm" /></div>
                                 </div>
-                                <div className="flex justify-between items-center bg-teal-50/50 print:bg-transparent rounded px-1 py-0 print:px-1">
-                                   <span className="text-[9px] lg:text-[10px] print:text-[11px] text-slate-500 font-bold shrink-0 w-3 print:w-3 leading-none">下</span>
-                                   <span className="text-[10px] lg:text-xs print:text-[13px] font-black text-teal-600 print:text-black tracking-wider flex-1 text-center leading-none">{r.aEnd || '--:--'}</span>
-                                   {/* 💡 使用原生 sm 紅綠燈組件，不再用 scale 導致裁切 */}
-                                   <div className="shrink-0"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} size="sm" /></div>
+                                
+                                {/* 實際下班 */}
+                                <div className="flex justify-between items-center bg-teal-50/80 print:bg-transparent rounded px-1.5 py-1 print:px-1 print:py-0">
+                                   <span className="text-[10px] lg:text-[11px] print:text-[11px] text-slate-500 font-bold shrink-0 w-3 print:w-3 leading-none">下</span>
+                                   <span className="text-[11px] lg:text-[13px] print:text-[13px] font-black text-teal-600 print:text-black tracking-wider flex-1 text-center leading-none">{r.aEnd || '--:--'}</span>
+                                   <div className="shrink-0 scale-[0.65] lg:scale-[0.75] print:scale-[0.55] origin-right w-5 print:w-5"><TrafficLight status={r.endStatus || 'none'} diff={r.endDiff} type="end" hideLabel={true} size="sm" /></div>
                                 </div>
                               </div>
+
                             )) : (
                               <div className="flex-1 flex items-center justify-center opacity-30">
-                                {/* 💡 休假標籤 */}
                                 <span className="text-2xl lg:text-3xl print:text-2xl font-black text-slate-400 print:text-gray-400 leading-none">休</span>
                               </div>
                             )}
