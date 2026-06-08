@@ -147,7 +147,7 @@
       
       const [view, setView] = useState('employee_matrix'); 
       const [toast, setToast] = useState(false);
-      const [date, setDate] = useState(new Date(2026, 3, 16));
+      const [date, setDate] = useState(new Date(2026, 5, 16)); // 預設跳至6月份
       
       const dateInputRef = useRef(null);
       const fileInputRef = useRef(null);
@@ -203,7 +203,13 @@
             const s = fShifts.find(sh => sh.empId === emp.id && sh.key === key);
             if (s) {
               let r = `${y}/${m + 1}/${d},${dow},${emp.name},${emp.role},`;
-              if (s.leaveType === 'work') r += `出勤,${s.shift1Loc||''},${s.shift1Start||''}-${s.shift1End||''},${s.shift2Loc||''},${s.shift2Start||''}-${s.shift2End||''},${s.shift3Loc||''},${s.shift3Start||''}-${s.shift3End||''}`;
+              if (s.leaveType === 'work') {
+                // 匯出包含崗位與備註
+                const s1 = `${s.shift1Loc||''}${s.shift1Station?`(${s.shift1Station})`:''}${s.shift1Note?`[${s.shift1Note}]`:''}`;
+                const s2 = `${s.shift2Loc||''}${s.shift2Station?`(${s.shift2Station})`:''}${s.shift2Note?`[${s.shift2Note}]`:''}`;
+                const s3 = `${s.shift3Loc||''}${s.shift3Station?`(${s.shift3Station})`:''}${s.shift3Note?`[${s.shift3Note}]`:''}`;
+                r += `出勤,${s1},${s.shift1Start||''}-${s.shift1End||''},${s2},${s.shift2Start||''}-${s.shift2End||''},${s3},${s.shift3Start||''}-${s.shift3End||''}`;
+              }
               else r += `${{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[s.leaveType] || s.leaveType},,,,,,`;
               csv += r + "\n";
             }
@@ -240,7 +246,14 @@
         else if (type === 'evening') u = { shift1Start: '16:30', shift1End: '20:30', shift1Loc: d1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
         else if (type === 'pt_a') u = { shift1Start: '11:00', shift1End: '14:00', shift1Loc: d1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
         else if (type === 'pt_b') u = { shift1Start: '17:00', shift1End: '21:00', shift1Loc: d1, shift2Start: '', shift2End: '', shift3Start: '', shift3End: '' };
-        else if (type === 'clear') u = { shift1Start: '', shift1End: '', shift2Start: '', shift2End: '', shift3Start: '', shift3End: '', shift1SubId: '', shift2SubId: '', shift3SubId: '' };
+        else if (type === 'clear') {
+          u = { 
+            shift1Start: '', shift1End: '', shift2Start: '', shift2End: '', shift3Start: '', shift3End: '', 
+            shift1SubId: '', shift2SubId: '', shift3SubId: '',
+            shift1Station: '', shift2Station: '', shift3Station: '',
+            shift1Note: '', shift2Note: '', shift3Note: ''
+          };
+        }
         setEShift(p => ({ ...p, ...u }));
       };
 
@@ -310,6 +323,23 @@
 
       return (
         <div className="min-h-screen bg-slate-100 print:bg-white flex flex-col font-sans font-bold text-slate-800 select-none">
+          
+          {/* 💡 加入動態崗位選單 */}
+          <datalist id="station-options">
+            <option value="內場" />
+            <option value="外場" />
+            <option value="櫃台" />
+            <option value="外送" />
+            <option value="機動" />
+            <option value="砧板" />
+            <option value="炸台" />
+            <option value="湯台" />
+            <option value="內為主外輔（主廚調配）" />
+            <option value="外為主內輔（主廚協調）" />
+            <option value="炸+砧（主廚調配）" />
+            <option value="湯+砧（主廚調配）" />
+          </datalist>
+
           <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; } ::-webkit-scrollbar { display: none !important; } }`}</style>
           {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><CheckCircle2 className="text-green-400" size={24} /> <span className="font-black tracking-widest text-lg">資料儲存成功</span></div>}
 
@@ -395,10 +425,15 @@
                             if (!s) bgColor = "bg-transparent hover:bg-slate-100";
                             else if (s.leaveType === 'work') {
                               [1, 2, 3].forEach(n => {
-                                const loc = String(s[`shift${n}Loc`] || ''); const start = decimalToStr(timeToDecimal(s[`shift${n}Start`])); const end = decimalToStr(timeToDecimal(s[`shift${n}End`])); const subId = s[`shift${n}SubId`] || s.subId; 
+                                const loc = String(s[`shift${n}Loc`] || ''); 
+                                const start = decimalToStr(timeToDecimal(s[`shift${n}Start`])); 
+                                const end = decimalToStr(timeToDecimal(s[`shift${n}End`])); 
+                                const subId = s[`shift${n}SubId`] || s.subId; 
+                                const station = s[`shift${n}Station`] || '';
+                                const note = s[`shift${n}Note`] || '';
                                 if (loc && start && end && (locFilter === '全部' || loc === locFilter)) {
                                    let subName = ''; if (subId) { const subEmp = fEmployees.find(e => e.id === subId); if (subEmp) subName = subEmp.name; }
-                                   segments.push({ loc, start, end, subName });
+                                   segments.push({ loc, start, end, subName, station, note });
                                 }
                               });
                               if (segments.length > 0) {
@@ -419,7 +454,15 @@
                             }
                             return (
                               <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} ${textColor} p-2 border font-bold cursor-pointer print:border-black whitespace-pre-line leading-snug relative`}>
-                                {s && s.leaveType === 'work' ? segments.map((seg, idx) => (<div key={idx} className="leading-tight mb-1 last:mb-0"><span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>{seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}</div>)) : content}
+                                {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
+                                  <div key={idx} className="leading-tight mb-2 last:mb-0">
+                                    <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {/* 💡 高辨識度的非紅色深藍字體，完美融入且清晰可讀 */}
+                                    {seg.station && <div className="text-blue-800 font-black mt-0.5 text-[12px]">{seg.station}</div>}
+                                    {seg.note && <div className="text-slate-700 font-black mt-0.5 text-[11px]">({seg.note})</div>}
+                                    {seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
+                                  </div>
+                                )) : content}
                               </td>
                             );
                           })}
@@ -540,13 +583,18 @@
                             const st = timeToDecimal(stRaw);
                             const ed = timeToDecimal(edRaw);
                             const subId = s[`shift${n}SubId`] || s.subId;
+                            const station = s[`shift${n}Station`] || '';
+                            const note = s[`shift${n}Note`] || '';
                             if (locFilter !== '全部' && loc !== locFilter) return; 
                             if (st !== null && ed !== null) {
                               let subName = '';
                               if (subId) { const subEmp = fEmployees.find(e => e.id === subId); if (subEmp) subName = subEmp.name; }
-                              segments.push({ loc, start: decimalToStr(st), end: decimalToStr(ed), subName });
+                              segments.push({ loc, start: decimalToStr(st), end: decimalToStr(ed), subName, station, note });
                               timeSlots.forEach(slot => { 
-                                if (slot.val >= st && slot.val < ed) { slotLocations.set(slot.val, loc); if (subName) slotSubs.set(slot.val, subName); }
+                                if (slot.val >= st && slot.val < ed) { 
+                                  slotLocations.set(slot.val, { loc, station, note, isStart: slot.val === st }); 
+                                  if (subName) slotSubs.set(slot.val, subName); 
+                                }
                               });
                             }
                           });
@@ -578,22 +626,35 @@
                               {segments.length > 0 ? segments.map((seg, idx) => (
                                 <div key={idx} className="mb-1 last:mb-0 leading-tight">
                                   <span className={seg.subName ? "text-red-600 line-through" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
+                                  {/* 💡 同步優化文字清單中的顏色為深藍字體 */}
+                                  {seg.station && <div className="text-blue-800 font-black text-[11px] mt-0.5">{seg.station}</div>}
+                                  {seg.note && <div className="text-slate-700 font-black text-[10px] mt-0.5">({seg.note})</div>}
                                   {seg.subName && <div className="text-red-600 text-[10px] font-black mt-0.5">由 {seg.subName} 代</div>}
                                 </div>
                               )) : <span className="text-slate-400">{infoStr}</span>}
                             </td>
                             {timeSlots.map((slot, i) => {
-                              const loc = slotLocations.get(slot.val);
+                              const cellData = slotLocations.get(slot.val);
                               const subName = slotSubs.get(slot.val);
                               let bgColor = '';
-                              if (loc) {
-                                if (loc.includes('六甲')) bgColor = 'bg-green-500 print:bg-black';
-                                else if (loc.includes('麻豆')) bgColor = 'bg-purple-500 print:bg-black';
+                              
+                              if (cellData && cellData.loc) {
+                                if (cellData.loc.includes('六甲')) bgColor = 'bg-green-500 print:bg-black';
+                                else if (cellData.loc.includes('麻豆')) bgColor = 'bg-purple-500 print:bg-black';
                                 else bgColor = 'bg-blue-500 print:bg-black';
                               }
+
                               return (
                                 <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
                                    {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[8px] text-white opacity-70 scale-75 origin-top-left ml-0.5 mt-0.5 font-black">代</span>}
+                                   
+                                   {/* 💡 甘特圖內的深藍浮動標籤 (非紅色) */}
+                                   {cellData && cellData.isStart && (cellData.station || cellData.note) && (
+                                      <div className="absolute left-1 top-1 z-30 flex flex-col gap-0.5 pointer-events-none w-max">
+                                          {cellData.station && <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-black border border-white/50">{cellData.station}</span>}
+                                          {cellData.note && <span className="bg-slate-700 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-bold border border-white/50">({cellData.note})</span>}
+                                      </div>
+                                   )}
                                 </td>
                               );
                             })}
@@ -679,7 +740,7 @@
               </div>
             )}
 
-            {/* 排班編輯 */}
+            {/* 💡 排班編輯 (5格：據點、上班、下班、崗位、備註) */}
             {eShift && (
               <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-2xl flex items-center justify-center z-[5000] p-6 font-black font-sans">
                 <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
@@ -687,7 +748,7 @@
                   <div className="p-8 overflow-y-auto space-y-6 flex-1 bg-slate-50">
                     <div className="grid grid-cols-4 gap-4">
                       {['work', 'off', 'annual', 'sick', 'schedule_off', 'madou_off', 'liujia_off'].map(id => (
-                        <button key={id} onClick={() => setEShift({...eShift, leaveType: id})} className={`py-4 rounded-xl border-2 text-lg ${eShift.leaveType===id ? 'border-orange-600 text-orange-600 bg-white':'bg-white text-slate-400'}`}>{id==='work'?'出勤':id==='off'?'休假':id==='schedule_off'?'排休':id==='madou_off'?'麻豆店休':id==='liujia_off'?'六甲店休':id==='annual'?'特休':'病假'}</button>
+                        <button key={id} onClick={() => setEShift({...eShift, leaveType: id})} className={`py-4 rounded-xl border-2 text-lg ${eShift.leaveType===id ? 'border-orange-600 text-orange-600 bg-white shadow-2xl scale-105':'border-slate-200 text-slate-400 bg-white'}`}>{id==='work'?'出勤':id==='off'?'休假':id==='schedule_off'?'排休':id==='madou_off'?'麻豆店休':id==='liujia_off'?'六甲店休':id==='annual'?'特休':'病假'}</button>
                       ))}
                     </div>
                     {eShift.leaveType === 'work' && (
@@ -696,15 +757,35 @@
                           <button onClick={() => applyShiftTemplate('full')} className="px-4 py-2 bg-orange-600 text-white rounded-lg">月薪全班</button>
                           <button onClick={() => applyShiftTemplate('morning')} className="px-4 py-2 bg-orange-500 text-white rounded-lg">早班</button>
                           <button onClick={() => applyShiftTemplate('evening')} className="px-4 py-2 bg-indigo-500 text-white rounded-lg">晚班</button>
+                          <button onClick={() => applyShiftTemplate('pt_a')} className="px-4 py-2 bg-teal-500 text-white rounded-lg">PT午班</button>
+                          <button onClick={() => applyShiftTemplate('pt_b')} className="px-4 py-2 bg-blue-500 text-white rounded-lg">PT晚班</button>
                           <button onClick={() => applyShiftTemplate('clear')} className="px-4 py-2 bg-slate-300 rounded-lg">清空</button>
                         </div>
                         {[1, 2, 3].map(n => (
                           <div key={n} className="p-6 bg-white rounded-2xl shadow-sm border-2">
                             <div className="flex justify-between items-center mb-4"><span className="text-orange-600">第 {n} 段班</span><select value={eShift[`shift${n}SubId`]||''} onChange={e=>setEShift({...eShift,[`shift${n}SubId`]:e.target.value})} className="border p-1 rounded"><option value="">本人出勤</option>{fEmployees.filter(emp=>emp.id!==eShift.empId).map(e=><option key={e.id} value={e.id}>{e.name}代</option>)}</select></div>
-                            <div className="grid grid-cols-3 gap-4">
-                              <select value={eShift[`shift${n}Loc`]||'麻豆'} onChange={e=>setEShift({...eShift,[`shift${n}Loc`]:e.target.value})} className="border-2 p-3 rounded-xl"><option>麻豆</option><option>六甲</option><option>茂迪</option><option>餐車</option></select>
-                              <input type="time" value={eShift[`shift${n}Start`]||''} onChange={e=>setEShift({...eShift,[`shift${n}Start`]:e.target.value})} className="border-2 p-3 rounded-xl"/>
-                              <input type="time" value={eShift[`shift${n}End`]||''} onChange={e=>setEShift({...eShift,[`shift${n}End`]:e.target.value})} className="border-2 p-3 rounded-xl"/>
+                            
+                            <div className="flex flex-col md:flex-row gap-3">
+                               <div className="flex flex-col gap-1 w-full md:w-24 shrink-0">
+                                   <label className="text-[10px] text-slate-400">據點</label>
+                                   <select value={eShift[`shift${n}Loc`]||'麻豆'} onChange={e=>setEShift({...eShift,[`shift${n}Loc`]:e.target.value})} className="border-2 p-2.5 rounded-xl text-lg font-black outline-none"><option>麻豆</option><option>六甲</option><option>茂迪</option><option>餐車</option></select>
+                               </div>
+                               <div className="flex flex-col gap-1 w-full md:w-28 shrink-0">
+                                   <label className="text-[10px] text-slate-400">上班</label>
+                                   <input type="time" value={eShift[`shift${n}Start`]||''} onChange={e=>setEShift({...eShift,[`shift${n}Start`]:e.target.value})} className="border-2 p-2.5 rounded-xl text-lg font-black font-mono outline-none"/>
+                               </div>
+                               <div className="flex flex-col gap-1 w-full md:w-28 shrink-0">
+                                   <label className="text-[10px] text-slate-400">下班</label>
+                                   <input type="time" value={eShift[`shift${n}End`]||''} onChange={e=>setEShift({...eShift,[`shift${n}End`]:e.target.value})} className="border-2 p-2.5 rounded-xl text-lg font-black font-mono outline-none"/>
+                               </div>
+                               <div className="flex flex-col gap-1 w-full flex-1">
+                                   <label className="text-[10px] text-blue-600">手動崗位(選填)</label>
+                                   <input type="text" list="station-options" placeholder="選填" value={eShift[`shift${n}Station`]||''} onChange={e=>setEShift({...eShift,[`shift${n}Station`]:e.target.value})} className="border-2 border-blue-200 bg-blue-50 focus:bg-white p-2.5 rounded-xl text-lg font-black text-blue-800 outline-none"/>
+                               </div>
+                               <div className="flex flex-col gap-1 w-full flex-1">
+                                   <label className="text-[10px] text-slate-500">文字備註(選填)</label>
+                                   <input type="text" placeholder="選填" value={eShift[`shift${n}Note`]||''} onChange={e=>setEShift({...eShift,[`shift${n}Note`]:e.target.value})} className="border-2 border-slate-200 bg-slate-50 focus:bg-white p-2.5 rounded-xl text-lg font-black text-slate-700 outline-none"/>
+                               </div>
                             </div>
                           </div>
                         ))}
@@ -715,12 +796,13 @@
                 </div>
               </div>
             )}
+
             {/* 營運記事 */}
             {eEvent && (
               <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[5500] p-6 font-black font-sans">
                 <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 border-4 border-white/20">
-                  <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)}><X/></button></div>
-                  <textarea id="et-box" className="w-full border-4 p-4 rounded-xl h-48 text-xl" defaultValue={eEvent.text} placeholder="例如：六甲店休" />
+                  <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)} className="text-slate-400 hover:text-black"><X/></button></div>
+                  <textarea id="et-box" className="w-full border-4 p-4 rounded-xl h-48 text-xl outline-none focus:border-orange-500 bg-slate-50" defaultValue={eEvent.text} placeholder="例如：六甲店休" />
                   <button onClick={() => { const txt = document.getElementById('et-box').value; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day)); saveToCloudAndLocal('event', `event_${k}`, { key: k, text: txt.trim(), base }); setEEvent(null); triggerToast(); }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl">💾 儲存事項</button>
                 </div>
               </div>
