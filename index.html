@@ -408,12 +408,18 @@
                       </tr>
                     </thead>
                     <tbody>
+                      {/* 💡 修復篩選 Bug：嚴謹比對段班是否有輸入時間，避免把空白資料當作有排班 */}
                       {fEmployees.filter(emp => {
                         if (nameFilter && !emp.name.includes(nameFilter)) return false;
                         if (locFilter === '全部') return true;
                         return weekDates.some(d => {
                           const s = getShiftObj(emp.id, d);
-                          return s && s.leaveType === 'work' && [s.shift1Loc, s.shift2Loc, s.shift3Loc].includes(locFilter);
+                          if (!s || s.leaveType !== 'work') return false;
+                          const activeLocs = [];
+                          if (s.shift1Start && s.shift1End) activeLocs.push(s.shift1Loc);
+                          if (s.shift2Start && s.shift2End) activeLocs.push(s.shift2Loc);
+                          if (s.shift3Start && s.shift3End) activeLocs.push(s.shift3Loc);
+                          return activeLocs.includes(locFilter);
                         });
                       }).map(emp => (
                         <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
@@ -457,7 +463,7 @@
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
                                   <div key={idx} className="leading-tight mb-2 last:mb-0">
                                     <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                    {/* 💡 高辨識度的非紅色深藍字體，完美融入且清晰可讀 */}
+                                    {/* 高辨識度的深藍色崗位標記 */}
                                     {seg.station && <div className="text-blue-800 font-black mt-0.5 text-[12px]">{seg.station}</div>}
                                     {seg.note && <div className="text-slate-700 font-black mt-0.5 text-[11px]">({seg.note})</div>}
                                     {seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
@@ -626,7 +632,6 @@
                               {segments.length > 0 ? segments.map((seg, idx) => (
                                 <div key={idx} className="mb-1 last:mb-0 leading-tight">
                                   <span className={seg.subName ? "text-red-600 line-through" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                  {/* 💡 同步優化文字清單中的顏色為深藍字體 */}
                                   {seg.station && <div className="text-blue-800 font-black text-[11px] mt-0.5">{seg.station}</div>}
                                   {seg.note && <div className="text-slate-700 font-black text-[10px] mt-0.5">({seg.note})</div>}
                                   {seg.subName && <div className="text-red-600 text-[10px] font-black mt-0.5">由 {seg.subName} 代</div>}
@@ -648,7 +653,6 @@
                                 <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
                                    {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[8px] text-white opacity-70 scale-75 origin-top-left ml-0.5 mt-0.5 font-black">代</span>}
                                    
-                                   {/* 💡 甘特圖內的深藍浮動標籤 (非紅色) */}
                                    {cellData && cellData.isStart && (cellData.station || cellData.note) && (
                                       <div className="absolute left-1 top-1 z-30 flex flex-col gap-0.5 pointer-events-none w-max">
                                           {cellData.station && <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-black border border-white/50">{cellData.station}</span>}
