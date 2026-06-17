@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>泰膳娘智慧排班系統 - 單機完美版</title>
+  <title>泰膳娘智慧排班系統 - GitHub版</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -19,6 +19,7 @@
       "imports": {
         "react": "https://esm.sh/react@18.2.0",
         "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
         "lucide-react": "https://esm.sh/lucide-react@0.263.1",
         "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
         "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
@@ -42,7 +43,14 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
-  <div id="root"></div>
+  
+  <!-- 💡 新增：避免 GitHub 載入較慢時出現全白畫面，讓您知道系統正常運作中 -->
+  <div id="root">
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0f172a; color:white; font-family:sans-serif;">
+      <h2 style="font-size:24px; font-weight:bold; letter-spacing:2px; margin-bottom:10px;">⏳ 泰膳娘系統載入中...</h2>
+      <p style="color:#94a3b8;">初次開啟模組可能需要 3-5 秒，請稍候</p>
+    </div>
+  </div>
 
   <script type="text/babel" data-type="module">
     import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -79,6 +87,8 @@
     const timeToDecimal = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h + (m === 30 ? 0.5 : 0); };
     const decimalToStr = (d) => { if (d === null) return ''; return String(d); };
 
+    const isValidTime = (t) => t && typeof t === 'string' && t.trim() !== '' && t !== 'null' && t !== 'undefined' && t !== '00:00';
+
     // --- 🚨 本地資料初始化腳本 ---
     const initializeLocalData = () => {
       const lsEmps = JSON.parse(localStorage.getItem('tsn_emp') || '[]');
@@ -88,7 +98,7 @@
     };
 
     // --- 🏠 2. 系統入口層 (登入畫面) ---
-    export default function App() {
+    function App() {
       const [user, setUser] = useState(null);
       const [role, setRole] = useState('none'); 
       const [isLoadingAuth, setIsLoadingAuth] = useState(false);
@@ -96,7 +106,10 @@
       useEffect(() => {
         const init = async () => {
           try { await signInAnonymously(auth); } 
-          catch (err) { console.error("連線錯誤", err); }
+          catch (err) { 
+            // 💡 核心修復：在 GitHub Pages 會因為未授權網域而報錯，我們捕獲它但不影響系統啟動
+            console.warn("Firebase 權限警告 (Github Pages 為未授權網域，自動切換為單機儲存模式):", err); 
+          }
         };
         init();
         const unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); });
@@ -147,7 +160,7 @@
       
       const [view, setView] = useState('employee_matrix'); 
       const [toast, setToast] = useState(false);
-      const [date, setDate] = useState(new Date(2026, 5, 16)); // 預設跳至6月份
+      const [date, setDate] = useState(new Date(2026, 5, 16)); 
       
       const dateInputRef = useRef(null);
       const fileInputRef = useRef(null);
@@ -166,10 +179,9 @@
 
       // --- 💾 雲端與本地端混和同步 ---
       useEffect(() => {
-        if (!user) return;
+        if (!user) return; // Github Pages 若無授權會提早返回，純用 localStorage 單機模式
         const p = (n) => collection(db, 'artifacts', appId, 'public', 'data', n);
         
-        // 使用 try-catch 的概念在監聽器中，若被擋則使用本地資料
         const unsubEmp = onSnapshot(p('employees'), s => { 
           if(s.docs.length > 0) { const d = s.docs.map(x => ({id: x.id, ...x.data()})); setEmployees(d); localStorage.setItem('tsn_emp', JSON.stringify(d)); } 
         }, err => console.log('使用本地電腦儲存模式'));
@@ -204,7 +216,6 @@
             if (s) {
               let r = `${y}/${m + 1}/${d},${dow},${emp.name},${emp.role},`;
               if (s.leaveType === 'work') {
-                // 匯出包含崗位與備註
                 const s1 = `${s.shift1Loc||''}${s.shift1Station?`(${s.shift1Station})`:''}${s.shift1Note?`[${s.shift1Note}]`:''}`;
                 const s2 = `${s.shift2Loc||''}${s.shift2Station?`(${s.shift2Station})`:''}${s.shift2Note?`[${s.shift2Note}]`:''}`;
                 const s3 = `${s.shift3Loc||''}${s.shift3Station?`(${s.shift3Station})`:''}${s.shift3Note?`[${s.shift3Note}]`:''}`;
@@ -225,6 +236,17 @@
       const getShiftObj = (empId, tDate) => fShifts.find(sh => sh.empId === empId && sh.key === getDayKey(tDate));
       const offEmployeesToday = useMemo(() => fEmployees.map(emp => { const s = getShiftObj(emp.id, date); return (s && s.leaveType && s.leaveType !== 'work') ? { name: emp.name, type: s.leaveType } : null; }).filter(Boolean), [fEmployees, fShifts, date]);
       const currentDailyEvent = fEvents.find(v => v.key === getDayKey(date));
+
+      const hasValidShiftAtLocation = (s, targetLoc) => {
+        if (!s || s.leaveType !== 'work') return false;
+        let match = false;
+        [1, 2, 3].forEach(n => {
+          if (isValidTime(s[`shift${n}Start`]) && isValidTime(s[`shift${n}End`]) && s[`shift${n}Loc`] === targetLoc) {
+            match = true;
+          }
+        });
+        return match;
+      };
 
       const renderEvents = (txt) => {
         if (!txt) return null;
@@ -257,7 +279,6 @@
         setEShift(p => ({ ...p, ...u }));
       };
 
-      // 💾 強健的寫入機制：一定會先存本地，就算雲端斷線也沒關係
       const saveToCloudAndLocal = async (type, id, data) => {
         try {
           if (type === 'employee') { const n = data ? [...employees.filter(e => e.id !== id), {id, ...data}] : employees.filter(e => e.id !== id); setEmployees(n); localStorage.setItem('tsn_emp', JSON.stringify(n)); }
@@ -269,7 +290,7 @@
           } else {
              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', type + 's', id));
           }
-        } catch (err) { console.warn("雲端操作失敗，已在本地端完成。"); }
+        } catch (err) { console.warn("雲端同步受阻，資料已安全儲存於您的瀏覽器記憶體中。"); }
       };
 
       const handleDownloadBackup = () => {
@@ -280,7 +301,6 @@
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
       };
 
-      // 📥 本地與雲端雙重備份還原
       const handleUploadRestore = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -292,7 +312,6 @@
             const res = JSON.parse(content);
             if (!res || (!res.employees && !res.shifts)) throw new Error("無效檔案");
             
-            // 強制寫入本地記憶體
             if (res.employees) {
               const emps = res.employees.map(x => ({...x, base}));
               setEmployees(emps); localStorage.setItem('tsn_emp', JSON.stringify(emps));
@@ -314,7 +333,7 @@
               const parts = res.shifts[0].key.split('_');
               if (parts.length === 3) setDate(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
             }
-            alert("✅ 備份檔已成功匯入！您的資料已妥善保存在電腦中。");
+            alert("✅ 備份檔已成功匯入！您的資料已妥善保存在此瀏覽器中。");
           } catch (err) { alert("❌ 檔案讀取失敗，請確認檔案格式"); }
           event.target.value = null;
         };
@@ -324,7 +343,6 @@
       return (
         <div className="min-h-screen bg-slate-100 print:bg-white flex flex-col font-sans font-bold text-slate-800 select-none">
           
-          {/* 💡 加入動態崗位選單 */}
           <datalist id="station-options">
             <option value="內場" />
             <option value="外場" />
@@ -340,7 +358,6 @@
             <option value="湯+砧（主廚調配）" />
           </datalist>
 
-          <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; } ::-webkit-scrollbar { display: none !important; } }`}</style>
           {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><CheckCircle2 className="text-green-400" size={24} /> <span className="font-black tracking-widest text-lg">資料儲存成功</span></div>}
 
           <nav className="max-w-[2400px] w-full mx-auto bg-white p-4 shadow-xl flex flex-col lg:flex-row justify-between items-center sticky top-0 z-40 border-b-2 print:hidden">
@@ -374,7 +391,6 @@
           </nav>
 
           <main className="flex-1 w-full max-w-[2400px] mx-auto p-4 md:p-6 print:p-0 print:m-0 font-black">
-            {/* 視圖 1: 員工週總表 */}
             {view === 'employee_matrix' && (
               <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b bg-slate-50 print:hidden shrink-0 gap-4">
@@ -408,19 +424,10 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {/* 💡 修復篩選 Bug：嚴謹比對段班是否有輸入時間，避免把空白資料當作有排班 */}
                       {fEmployees.filter(emp => {
                         if (nameFilter && !emp.name.includes(nameFilter)) return false;
                         if (locFilter === '全部') return true;
-                        return weekDates.some(d => {
-                          const s = getShiftObj(emp.id, d);
-                          if (!s || s.leaveType !== 'work') return false;
-                          const activeLocs = [];
-                          if (s.shift1Start && s.shift1End) activeLocs.push(s.shift1Loc);
-                          if (s.shift2Start && s.shift2End) activeLocs.push(s.shift2Loc);
-                          if (s.shift3Start && s.shift3End) activeLocs.push(s.shift3Loc);
-                          return activeLocs.includes(locFilter);
-                        });
+                        return weekDates.some(d => hasValidShiftAtLocation(getShiftObj(emp.id, d), locFilter));
                       }).map(emp => (
                         <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
                           <td className="py-5 px-2 font-black bg-slate-50 print:bg-transparent text-lg">{emp.name}</td>
@@ -432,12 +439,15 @@
                             else if (s.leaveType === 'work') {
                               [1, 2, 3].forEach(n => {
                                 const loc = String(s[`shift${n}Loc`] || ''); 
-                                const start = decimalToStr(timeToDecimal(s[`shift${n}Start`])); 
-                                const end = decimalToStr(timeToDecimal(s[`shift${n}End`])); 
+                                const startStr = s[`shift${n}Start`];
+                                const endStr = s[`shift${n}End`];
                                 const subId = s[`shift${n}SubId`] || s.subId; 
                                 const station = s[`shift${n}Station`] || '';
                                 const note = s[`shift${n}Note`] || '';
-                                if (loc && start && end && (locFilter === '全部' || loc === locFilter)) {
+                                
+                                if (isValidTime(startStr) && isValidTime(endStr) && loc && (locFilter === '全部' || loc === locFilter)) {
+                                   const start = decimalToStr(timeToDecimal(startStr)); 
+                                   const end = decimalToStr(timeToDecimal(endStr)); 
                                    let subName = ''; if (subId) { const subEmp = fEmployees.find(e => e.id === subId); if (subEmp) subName = subEmp.name; }
                                    segments.push({ loc, start, end, subName, station, note });
                                 }
@@ -463,7 +473,6 @@
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
                                   <div key={idx} className="leading-tight mb-2 last:mb-0">
                                     <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                    {/* 高辨識度的深藍色崗位標記 */}
                                     {seg.station && <div className="text-blue-800 font-black mt-0.5 text-[12px]">{seg.station}</div>}
                                     {seg.note && <div className="text-slate-700 font-black mt-0.5 text-[11px]">({seg.note})</div>}
                                     {seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
@@ -480,21 +489,17 @@
               </div>
             )}
 
-            {/* 視圖 2: 經典甘特圖 */}
             {view === 'daily' && (
               <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
-                
                 <div className="flex justify-between items-center p-6 border-b bg-slate-50 print:bg-white print:p-2 shrink-0">
                   <h2 className="text-2xl font-black flex flex-wrap items-center gap-3">
                     {date.getFullYear()}年{date.getMonth()+1}月{date.getDate()}日 (星期{['日','一','二','三','四','五','六'][date.getDay()]}) 排班時間表
                   </h2>
                   <div className="flex items-center gap-2 no-print">
-                    
                     <div className="relative mr-2">
                       <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 pl-10" />
                       <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
                     </div>
-
                     <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors mr-2 cursor-pointer">
                       {isAdmin && <option value="全部">全據點</option>}
                       <option value="麻豆">📍 麻豆</option><option value="六甲">📍 六甲</option><option value="茂迪">📍 茂迪</option><option value="餐車">🚚 餐車</option>
@@ -555,13 +560,7 @@
                       {fEmployees.filter(emp => {
                         if (nameFilter && !emp.name.includes(nameFilter)) return false;
                         if (locFilter === '全部') return true;
-                        const s = getShiftObj(emp.id, date);
-                        if (!s || s.leaveType !== 'work') return false;
-                        const activeLocs = [];
-                        if (s.shift1Start && s.shift1End) activeLocs.push(s.shift1Loc);
-                        if (s.shift2Start && s.shift2End) activeLocs.push(s.shift2Loc);
-                        if (s.shift3Start && s.shift3End) activeLocs.push(s.shift3Loc);
-                        return activeLocs.includes(locFilter);
+                        return hasValidShiftAtLocation(getShiftObj(emp.id, date), locFilter);
                       }).map(emp => {
                         const s = getShiftObj(emp.id, date);
                         const isWork = s?.leaveType === 'work';
@@ -586,13 +585,15 @@
                             const loc = String(s[`shift${n}Loc`] || '');
                             const stRaw = s[`shift${n}Start`];
                             const edRaw = s[`shift${n}End`];
-                            const st = timeToDecimal(stRaw);
-                            const ed = timeToDecimal(edRaw);
                             const subId = s[`shift${n}SubId`] || s.subId;
                             const station = s[`shift${n}Station`] || '';
                             const note = s[`shift${n}Note`] || '';
+                            
                             if (locFilter !== '全部' && loc !== locFilter) return; 
-                            if (st !== null && ed !== null) {
+                            
+                            if (isValidTime(stRaw) && isValidTime(edRaw)) {
+                              const st = timeToDecimal(stRaw);
+                              const ed = timeToDecimal(edRaw);
                               let subName = '';
                               if (subId) { const subEmp = fEmployees.find(e => e.id === subId); if (subEmp) subName = subEmp.name; }
                               segments.push({ loc, start: decimalToStr(st), end: decimalToStr(ed), subName, station, note });
@@ -653,6 +654,7 @@
                                 <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
                                    {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[8px] text-white opacity-70 scale-75 origin-top-left ml-0.5 mt-0.5 font-black">代</span>}
                                    
+                                   {/* 甘特圖內的深藍浮動標籤 */}
                                    {cellData && cellData.isStart && (cellData.station || cellData.note) && (
                                       <div className="absolute left-1 top-1 z-30 flex flex-col gap-0.5 pointer-events-none w-max">
                                           {cellData.station && <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-black border border-white/50">{cellData.station}</span>}
@@ -796,7 +798,7 @@
                       </>
                     )}
                   </div>
-                  <div className="p-6 bg-white"><button onClick={() => { saveToCloudAndLocal('shift', `${eShift.empId}_${eShift.key}`, {...eShift, base}); setEShift(null); triggerToast(); }} className="w-full py-6 bg-orange-600 text-white rounded-2xl text-2xl font-black">💾 儲存排班</button></div>
+                  <div className="p-6 bg-white"><button onClick={() => { saveToCloudAndLocal('shift', `${eShift.empId}_${eShift.key}`, {...eShift, base}); setEShift(null); triggerToast(); }} className="w-full py-6 bg-orange-600 text-white rounded-2xl text-2xl font-black shadow-lg hover:scale-[1.02] active:scale-95 transition-all">💾 儲存排班</button></div>
                 </div>
               </div>
             )}
@@ -807,7 +809,7 @@
                 <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 border-4 border-white/20">
                   <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)} className="text-slate-400 hover:text-black"><X/></button></div>
                   <textarea id="et-box" className="w-full border-4 p-4 rounded-xl h-48 text-xl outline-none focus:border-orange-500 bg-slate-50" defaultValue={eEvent.text} placeholder="例如：六甲店休" />
-                  <button onClick={() => { const txt = document.getElementById('et-box').value; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day)); saveToCloudAndLocal('event', `event_${k}`, { key: k, text: txt.trim(), base }); setEEvent(null); triggerToast(); }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl">💾 儲存事項</button>
+                  <button onClick={() => { const txt = document.getElementById('et-box').value; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day)); saveToCloudAndLocal('event', `event_${k}`, { key: k, text: txt.trim(), base }); setEEvent(null); triggerToast(); }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl shadow-lg active:scale-95 transition-all">💾 儲存事項</button>
                 </div>
               </div>
             )}
