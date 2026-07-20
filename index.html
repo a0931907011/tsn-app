@@ -6,27 +6,20 @@
   <title>泰膳娘智慧排班系統 - GitHub版</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 💡 核心修復：使用完整的 Babel Standalone 確保 GitHub 不會阻擋 JSX 解析 -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- 引入 React 與 ReactDOM (使用 UMD 版本，確保絕對穩定) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-  <script>
-    window.addEventListener('error', function(event) {
-      console.error("系統錯誤:", event.error);
-    });
-  </script>
+  <!-- 引入 Firebase SDK (相容舊版瀏覽器) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
-      }
-    }
-  </script>
+  <!-- 引入 Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
     @media print {
@@ -40,33 +33,25 @@
     .calendar-cell-scroll::-webkit-scrollbar { width: 4px; }
     .calendar-cell-scroll::-webkit-scrollbar-track { background: transparent; }
     .calendar-cell-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+    
+    /* 💡 優化：客製化柔和的麻豆紫色，並將字體加深確保極致清晰 */
+    .bg-madou-soft { background-color: #d8b4fe !important; color: #1e1b4b !important; border: 1px solid #c084fc; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
   
-  <!-- 💡 新增：避免 GitHub 載入較慢時出現全白畫面，讓您知道系統正常運作中 -->
   <div id="root">
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0f172a; color:white; font-family:sans-serif;">
       <h2 style="font-size:24px; font-weight:bold; letter-spacing:2px; margin-bottom:10px;">⏳ 泰膳娘系統載入中...</h2>
-      <p style="color:#94a3b8;">初次開啟模組可能需要 3-5 秒，請稍候</p>
+      <p style="color:#94a3b8;">初次開啟可能需要 3-5 秒，請稍候</p>
     </div>
   </div>
 
-  <script type="text/babel" data-type="module">
-    import React, { useState, useMemo, useEffect, useRef } from 'react';
-    import { createRoot } from 'react-dom/client';
-    import { initializeApp } from 'firebase/app';
-    import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from 'firebase/firestore';
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-    import { 
-      Calendar, Users, Clock, CheckCircle2, ChevronLeft, ChevronRight, 
-      X, Edit3, UserCheck, Shield, Lock, Save, Tag, Search,
-      Settings, Trash2, Download, Upload, Users2, ShieldCheck, LogOut, Printer, Zap, AlertCircle, Coffee,
-      FileSpreadsheet
-    } from 'lucide-react';
+  <script type="text/babel">
+    const { useState, useMemo, useEffect, useRef } = React;
 
     // --- 🔐 1. Firebase 初始化 ---
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+    const firebaseConfig = {
       apiKey: "AIzaSyBY_L6oa0czZvDhvt55XSDGu9Ieu1OIhic",
       authDomain: "planning-with-ai-b050b.firebaseapp.com",
       projectId: "planning-with-ai-b050b",
@@ -74,9 +59,10 @@
       messagingSenderId: "45992279690",
       appId: "1:45992279690:web:5b2881d834bb1c2b52b773"
     };
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+    
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
     const appId = 'tsn-v150-local-master';
     
@@ -97,6 +83,12 @@
       return { lsEmps, lsShifts, lsEvents };
     };
 
+    // 小圖示元件替代方案 (不依賴外部模組)
+    const Icon = ({ name, size=24, className="" }) => {
+        useEffect(() => { lucide.createIcons(); }, [name]);
+        return <i data-lucide={name} style={{width: size, height: size}} className={className}></i>;
+    };
+
     // --- 🏠 2. 系統入口層 (登入畫面) ---
     function App() {
       const [user, setUser] = useState(null);
@@ -105,14 +97,11 @@
 
       useEffect(() => {
         const init = async () => {
-          try { await signInAnonymously(auth); } 
-          catch (err) { 
-            // 💡 核心修復：在 GitHub Pages 會因為未授權網域而報錯，我們捕獲它但不影響系統啟動
-            console.warn("Firebase 權限警告 (Github Pages 為未授權網域，自動切換為單機儲存模式):", err); 
-          }
+          try { await auth.signInAnonymously(); } 
+          catch (err) { console.warn("Firebase 連線提示 (可忽略):", err); }
         };
         init();
-        const unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); });
+        const unsubscribe = auth.onAuthStateChanged((u) => { setUser(u); });
         return () => unsubscribe();
       }, []);
 
@@ -128,7 +117,7 @@
       if (role === 'none') return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans">
           <div className="bg-white rounded-[3rem] p-12 w-full max-w-md text-center shadow-2xl animate-in zoom-in-95 border-4 border-white/10">
-            <Lock className="mx-auto text-orange-600 mb-6" size={64} />
+            <div className="mx-auto text-orange-600 mb-6 flex justify-center"><Icon name="lock" size={64}/></div>
             <h1 className="text-3xl font-black mb-8 text-slate-800">泰膳娘系統入口</h1>
             <input 
               id="pwd-input" type="password" autoFocus placeholder="請輸入通行密碼"
@@ -170,7 +159,6 @@
       const [mHR, setMHR] = useState(false);
       const [hrForm, setHrForm] = useState({ id: null, name: '', type: '月薪', role: '主廚' }); 
       const [mBackup, setMBackup] = useState(false);
-      const [showPrintModal, setShowPrintModal] = useState(false);
 
       const [locFilter, setLocFilter] = useState('全部');
       const [nameFilter, setNameFilter] = useState(''); 
@@ -179,18 +167,18 @@
 
       // --- 💾 雲端與本地端混和同步 ---
       useEffect(() => {
-        if (!user) return; // Github Pages 若無授權會提早返回，純用 localStorage 單機模式
-        const p = (n) => collection(db, 'artifacts', appId, 'public', 'data', n);
+        if (!user) return; 
+        const p = (n) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(n);
         
-        const unsubEmp = onSnapshot(p('employees'), s => { 
+        const unsubEmp = p('employees').onSnapshot(s => { 
           if(s.docs.length > 0) { const d = s.docs.map(x => ({id: x.id, ...x.data()})); setEmployees(d); localStorage.setItem('tsn_emp', JSON.stringify(d)); } 
         }, err => console.log('使用本地電腦儲存模式'));
         
-        const unsubShifts = onSnapshot(p('shifts'), s => { 
+        const unsubShifts = p('shifts').onSnapshot(s => { 
           if(s.docs.length > 0) { const d = s.docs.map(x => ({id: x.id, ...x.data()})); setShifts(d); localStorage.setItem('tsn_shifts', JSON.stringify(d)); } 
         }, err => {});
         
-        const unsubEvents = onSnapshot(p('events'), s => { 
+        const unsubEvents = p('events').onSnapshot(s => { 
           if(s.docs.length > 0) { const d = s.docs.map(x => ({id: x.id, ...x.data()})); setEvents(d); localStorage.setItem('tsn_events', JSON.stringify(d)); } 
         }, err => {});
 
@@ -202,7 +190,7 @@
       const fEvents = useMemo(() => events.filter(v => v.base === base || !v.base), [events, base]);
 
       const triggerToast = () => { setToast(true); setTimeout(() => setToast(false), 2000); };
-      const handlePrint = () => { setShowPrintModal(true); };
+      const handlePrint = () => { window.print(); };
 
       const handleExportExcel = () => {
         let csv = '\uFEFF日期,星期,姓名,崗位,出勤狀態,地點段一,時間段一,地點段二,時間段二,地點段三,時間段三\n';
@@ -254,9 +242,9 @@
           const t = str.trim(); if (!t) return null;
           if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-red-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
           if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-green-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-purple-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
+          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[15px] md:text-[18px] print:text-[14px] text-purple-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
           if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-orange-500 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[12px] md:text-[14px] print:text-[10px] bg-yellow-100 text-slate-800 print:bg-transparent border border-yellow-200 px-1.5 md:px-2 print:px-0 py-0.5 md:py-1 print:py-0 rounded-md mb-1 md:mb-1.5 print:mb-0.5 font-bold print:leading-tight">• {String(t)}</div>;
+          return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[14px] md:text-[16px] print:text-[12px] bg-yellow-100 text-slate-800 print:bg-transparent border border-yellow-200 px-1.5 md:px-2 print:px-0 py-0.5 md:py-1 print:py-0 rounded-md mb-1 md:mb-1.5 print:mb-0.5 font-bold print:leading-tight">• {String(t)}</div>;
         });
       };
 
@@ -286,9 +274,9 @@
           else if (type === 'event') { const n = data ? [...events.filter(v => v.id !== id), {id, ...data}] : events.filter(v => v.id !== id); setEvents(n); localStorage.setItem('tsn_events', JSON.stringify(n)); }
           
           if (data) {
-             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', type + 's', id), data);
+             await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(type + 's').doc(id).set(data);
           } else {
-             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', type + 's', id));
+             await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(type + 's').doc(id).delete();
           }
         } catch (err) { console.warn("雲端同步受阻，資料已安全儲存於您的瀏覽器記憶體中。"); }
       };
@@ -315,17 +303,17 @@
             if (res.employees) {
               const emps = res.employees.map(x => ({...x, base}));
               setEmployees(emps); localStorage.setItem('tsn_emp', JSON.stringify(emps));
-              emps.forEach(emp => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'employees', emp.id), emp).catch(e=>{}));
+              emps.forEach(emp => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('employees').doc(emp.id).set(emp).catch(e=>{}));
             }
             if (res.shifts) {
               const shs = res.shifts.map(x => ({...x, base}));
               setShifts(shs); localStorage.setItem('tsn_shifts', JSON.stringify(shs));
-              shs.forEach(s => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shifts', s.id || `${s.empId}_${s.key}`), s).catch(e=>{}));
+              shs.forEach(s => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('shifts').doc(s.id || `${s.empId}_${s.key}`).set(s).catch(e=>{}));
             }
             if (res.events) {
               const evs = res.events.map(x => ({...x, base}));
               setEvents(evs); localStorage.setItem('tsn_events', JSON.stringify(evs));
-              evs.forEach(v => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', v.id || `event_${v.key}`), v).catch(e=>{}));
+              evs.forEach(v => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('events').doc(v.id || `event_${v.key}`).set(v).catch(e=>{}));
             }
             
             triggerToast(); setMBackup(false); 
@@ -358,18 +346,18 @@
             <option value="湯+砧（主廚調配）" />
           </datalist>
 
-          {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><CheckCircle2 className="text-green-400" size={24} /> <span className="font-black tracking-widest text-lg">資料儲存成功</span></div>}
+          {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><Icon name="check-circle-2" className="text-green-400"/> <span className="font-black tracking-widest text-lg">資料儲存成功</span></div>}
 
           <nav className="max-w-[2400px] w-full mx-auto bg-white p-4 shadow-xl flex flex-col lg:flex-row justify-between items-center sticky top-0 z-40 border-b-2 print:hidden">
             <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-2xl text-white shadow-lg ${isAdmin ? 'bg-orange-600 shadow-orange-200' : 'bg-slate-800'}`}>{isAdmin ? <ShieldCheck size={32}/> : <UserCheck size={32}/>}</div>
+              <div className={`p-3 rounded-2xl text-white shadow-lg ${isAdmin ? 'bg-orange-600 shadow-orange-200' : 'bg-slate-800'}`}>{isAdmin ? <Icon name="shield-check" size={32}/> : <Icon name="user-check" size={32}/>}</div>
               <div><h1 className="text-2xl font-black tracking-tighter">泰膳娘系統 <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded align-middle">單機/雲端雙用版</span></h1></div>
             </div>
             <div className="flex items-center gap-3 flex-wrap mt-4 lg:mt-0">
               <div className="flex bg-slate-100 p-1.5 rounded-xl items-center shadow-inner">
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - (view==='employee_matrix'?7:view==='daily'?1:30)))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronLeft size={20}/></button>
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - (view==='employee_matrix'?7:view==='daily'?1:30)))} className="p-2 hover:bg-white rounded-lg transition-colors"><Icon name="chevron-left" size={20}/></button>
                 <span className="px-4 text-xl font-black text-orange-600">{view === 'employee_matrix' ? `${date.getFullYear()}年 ${date.getMonth()+1}月 第 ${Math.ceil(date.getDate()/7)} 週` : view === 'daily' ? `${date.getFullYear()}年 ${date.getMonth()+1}月${date.getDate()}日` : `${date.getFullYear()}年 ${date.getMonth() + 1}月`}</span>
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + (view==='employee_matrix'?7:view==='daily'?1:30)))} className="p-2 hover:bg-white rounded-lg transition-colors"><ChevronRight size={20}/></button>
+                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + (view==='employee_matrix'?7:view==='daily'?1:30)))} className="p-2 hover:bg-white rounded-lg transition-colors"><Icon name="chevron-right" size={20}/></button>
               </div>
               <div className="flex bg-slate-100 p-1.5 rounded-xl shadow-inner font-black text-sm">
                 <button onClick={() => setView('employee_matrix')} className={`px-4 py-2 rounded-lg transition-all ${view==='employee_matrix'?'bg-white text-orange-600 shadow-md':'text-slate-500'}`}>📝 員工週總表</button>
@@ -377,15 +365,15 @@
                 <button onClick={() => setView('monthly')} className={`px-4 py-2 rounded-lg transition-all ${view==='monthly'?'bg-white text-orange-600 shadow-md':'text-slate-500'}`}>🗓️ 營運月曆</button>
               </div>
               <div className="flex gap-2 ml-2">
-                <button onClick={handlePrint} className="px-4 py-2 bg-orange-100 text-orange-700 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm"><Printer size={20}/> 列印</button>
-                <button onClick={handleExportExcel} className="px-4 py-2 bg-green-100 text-green-700 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm"><FileSpreadsheet size={20}/> 匯出</button>
+                <button onClick={handlePrint} className="px-4 py-2 bg-orange-100 text-orange-700 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm"><Icon name="printer" size={20}/> 列印</button>
+                <button onClick={handleExportExcel} className="px-4 py-2 bg-green-100 text-green-700 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm"><Icon name="file-spreadsheet" size={20}/> 匯出</button>
                 {isAdmin && (
                   <>
-                    <button onClick={() => { setMHR(true); setHrForm({ id: null, name: '', type: '月薪', role: '主廚' }); }} className="p-2 bg-white border border-slate-200 text-orange-600 rounded-xl shadow-sm" title="人資庫"><Users2 size={22}/></button>
-                    <button onClick={() => setMBackup(true)} className="px-4 py-2 bg-white border border-slate-200 text-orange-600 rounded-xl shadow-sm transition-all flex items-center gap-2"><Shield size={20}/>上傳備份</button>
+                    <button onClick={() => { setMHR(true); setHrForm({ id: null, name: '', type: '月薪', role: '主廚' }); }} className="p-2 bg-white border border-slate-200 text-orange-600 rounded-xl shadow-sm" title="人資庫"><Icon name="users-2" size={22}/></button>
+                    <button onClick={() => setMBackup(true)} className="px-4 py-2 bg-white border border-slate-200 text-orange-600 rounded-xl shadow-sm transition-all flex items-center gap-2"><Icon name="shield" size={20}/>上傳備份</button>
                   </>
                 )}
-                <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 rounded-xl shadow-sm ml-1"><LogOut size={22}/></button>
+                <button onClick={onLogout} className="p-2 bg-red-50 text-red-600 rounded-xl shadow-sm ml-1"><Icon name="log-out" size={22}/></button>
               </div>
             </div>
           </nav>
@@ -394,11 +382,11 @@
             {view === 'employee_matrix' && (
               <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b bg-slate-50 print:hidden shrink-0 gap-4">
-                  <div className="text-xl font-black text-slate-700 flex items-center gap-2"><Calendar size={28} className="text-orange-600"/> 當週排班篩選</div>
+                  <div className="text-xl font-black text-slate-700 flex items-center gap-2"><Icon name="calendar" size={28} className="text-orange-600"/> 當週排班篩選</div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                       <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 md:w-48 pl-10" />
-                      <Search className="absolute left-3 top-3.5 text-slate-400" size={18}/>
+                      <Icon name="search" className="absolute left-3 top-3.5 text-slate-400" size={18}/>
                     </div>
                     <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors cursor-pointer">
                       {isAdmin && <option value="全部">全據點</option>}
@@ -407,18 +395,18 @@
                   </div>
                 </div>
                 <div className="hidden print:block text-center py-2 bg-white mb-2 shrink-0">
-                   <h2 className="text-xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
+                   <h2 className="text-2xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
                 </div>
                 <div className="overflow-auto flex-1 print:overflow-visible">
-                  <table className="w-full text-center border-collapse text-[14px] print:text-[11px] gantt-table relative min-w-[800px]">
+                  <table className="w-full text-center border-collapse text-[16px] md:text-[18px] print:text-[14px] gantt-table relative min-w-[1000px]">
                     <thead className="sticky top-0 z-20 shadow-sm">
-                      <tr className="bg-slate-100 print:bg-gray-100">
-                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100">姓名</th>
-                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100">崗位</th>
+                      <tr className="bg-slate-200 print:bg-gray-200 text-slate-900">
+                        <th className="py-4 px-2 w-28 bg-slate-200 print:bg-gray-200 font-black">姓名</th>
+                        <th className="py-4 px-2 w-28 bg-slate-200 print:bg-gray-200 font-black">崗位</th>
                         {weekDates.map((d, i) => (
-                          <th key={i} className="py-4 px-2 min-w-[120px] bg-slate-100 print:bg-gray-100 border-l border-white print:border-gray-300">
-                            <div className="text-slate-500 print:text-black font-black text-lg">{d.getDate()}</div>
-                            <div className="text-xs text-slate-400">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
+                          <th key={i} className="py-4 px-2 min-w-[140px] bg-slate-200 print:bg-gray-200 border-l border-white print:border-gray-400">
+                            <div className="text-slate-900 print:text-black font-black text-xl md:text-2xl">{d.getDate()}</div>
+                            <div className="text-base text-slate-800 font-bold">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
                           </th>
                         ))}
                       </tr>
@@ -430,8 +418,8 @@
                         return weekDates.some(d => hasValidShiftAtLocation(getShiftObj(emp.id, d), locFilter));
                       }).map(emp => (
                         <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
-                          <td className="py-5 px-2 font-black bg-slate-50 print:bg-transparent text-lg">{emp.name}</td>
-                          <td className="py-5 px-2 text-slate-500 font-bold bg-slate-50 print:bg-transparent">{emp.role}</td>
+                          <td className="py-6 px-2 font-black bg-slate-50 print:bg-transparent text-slate-900 text-xl">{emp.name}</td>
+                          <td className="py-6 px-2 text-slate-800 font-black bg-slate-50 print:bg-transparent text-lg">{emp.role}</td>
                           {weekDates.map((d, i) => {
                             const s = getShiftObj(emp.id, d);
                             let bgColor = "bg-white", textColor = "text-slate-800", content = "", segments = [];
@@ -454,30 +442,30 @@
                               });
                               if (segments.length > 0) {
                                 const firstLoc = segments[0].loc;
-                                if (firstLoc.includes('麻豆')) { bgColor = "bg-[#d946ef]"; textColor = "text-white"; }
+                                if (firstLoc.includes('麻豆')) { bgColor = "bg-madou-soft"; textColor = "text-[#1e1b4b]"; }
                                 else if (firstLoc.includes('六甲')) { bgColor = "bg-[#86efac]"; textColor = "text-slate-900"; }
-                                else { bgColor = "bg-blue-400"; textColor = "text-white"; }
+                                else { bgColor = "bg-blue-300"; textColor = "text-slate-900"; }
                               } else bgColor = "bg-transparent hover:bg-slate-100"; 
                             } else {
-                              if (s.leaveType === 'off') { bgColor = "bg-yellow-100"; textColor = "text-yellow-700"; content = "休假"; }
-                              else if (s.leaveType === 'schedule_off') { bgColor = "bg-yellow-300"; textColor = "text-slate-800"; content = "排休"; }
-                              else if (s.leaveType === 'madou_off') { bgColor = "bg-purple-100"; textColor = "text-purple-800"; content = "麻豆店休"; }
-                              else if (s.leaveType === 'liujia_off') { bgColor = "bg-green-100"; textColor = "text-green-800"; content = "六甲店休"; }
-                              else if (s.leaveType === 'annual') { bgColor = "bg-green-200"; textColor = "text-green-800"; content = "特休"; }
-                              else if (s.leaveType === 'sick') { bgColor = "bg-red-200"; textColor = "text-red-800"; content = "病假"; }
-                              else if (s.leaveType === 'personal') { bgColor = "bg-orange-200"; textColor = "text-orange-800"; content = "事假"; }
+                              if (s.leaveType === 'off') { bgColor = "bg-yellow-200"; textColor = "text-yellow-950"; content = "休假"; }
+                              else if (s.leaveType === 'schedule_off') { bgColor = "bg-yellow-400"; textColor = "text-slate-900"; content = "排休"; }
+                              else if (s.leaveType === 'madou_off') { bgColor = "bg-purple-200"; textColor = "text-purple-950"; content = "麻豆店休"; }
+                              else if (s.leaveType === 'liujia_off') { bgColor = "bg-green-200"; textColor = "text-green-950"; content = "六甲店休"; }
+                              else if (s.leaveType === 'annual') { bgColor = "bg-green-300"; textColor = "text-green-950"; content = "特休"; }
+                              else if (s.leaveType === 'sick') { bgColor = "bg-red-200"; textColor = "text-red-950"; content = "病假"; }
+                              else if (s.leaveType === 'personal') { bgColor = "bg-orange-200"; textColor = "text-orange-950"; content = "事假"; }
                               if ((s.leaveType === 'madou_off' && locFilter === '六甲') || (s.leaveType === 'liujia_off' && locFilter === '麻豆')) { bgColor = "bg-transparent hover:bg-slate-100"; content = ""; }
                             }
                             return (
-                              <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} ${textColor} p-2 border font-bold cursor-pointer print:border-black whitespace-pre-line leading-snug relative`}>
+                              <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} ${textColor} p-3 border font-black cursor-pointer print:border-black whitespace-pre-line leading-relaxed relative`}>
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
-                                  <div key={idx} className="leading-tight mb-2 last:mb-0">
-                                    <span className={seg.subName ? "line-through opacity-60" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                    {seg.station && <div className="text-blue-800 font-black mt-0.5 text-[12px]">{seg.station}</div>}
-                                    {seg.note && <div className="text-slate-700 font-black mt-0.5 text-[11px]">({seg.note})</div>}
-                                    {seg.subName && <div className="text-[10px] mt-0.5 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
+                                  <div key={idx} className="mb-3 last:mb-0">
+                                    <span className={seg.subName ? "line-through opacity-80 text-[16px] md:text-[18px] text-slate-900" : "text-[16px] md:text-[18px]"}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {seg.station && <div className="text-blue-950 font-black mt-1 text-[14px] md:text-[16px] tracking-wide">{seg.station}</div>}
+                                    {seg.note && <div className="text-slate-900 font-black mt-1 text-[13px] md:text-[14px]">({seg.note})</div>}
+                                    {seg.subName && <div className="text-[12px] md:text-[13px] mt-1 text-red-700 bg-white/90 px-1.5 py-0.5 rounded inline-block shadow-sm font-black">({seg.subName}代)</div>}
                                   </div>
-                                )) : content}
+                                )) : <span className="text-[16px] md:text-[18px] font-black">{content}</span>}
                               </td>
                             );
                           })}
@@ -498,27 +486,27 @@
                   <div className="flex items-center gap-2 no-print">
                     <div className="relative mr-2">
                       <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 pl-10" />
-                      <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                      <Icon name="search" className="absolute left-3 top-3.5 text-slate-400" size={18} />
                     </div>
                     <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors mr-2 cursor-pointer">
                       {isAdmin && <option value="全部">全據點</option>}
                       <option value="麻豆">📍 麻豆</option><option value="六甲">📍 六甲</option><option value="茂迪">📍 茂迪</option><option value="餐車">🚚 餐車</option>
                     </select>
 
-                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><ChevronLeft size={20}/></button>
+                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><Icon name="chevron-left" size={20}/></button>
                     <div className="flex items-center gap-2 bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2.5 rounded-xl shadow-inner transition-colors relative cursor-pointer">
-                      <Calendar size={20} className="pointer-events-none z-10" />
+                      <Icon name="calendar" size={20} className="pointer-events-none z-10" />
                       <input type="date" ref={dateInputRef} className="bg-transparent outline-none cursor-pointer font-black text-orange-700 absolute inset-0 opacity-0 z-20 scale-150" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
                       <span className="pointer-events-none z-10 font-black">選擇日期</span>
                     </div>
-                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><ChevronRight size={20}/></button>
+                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><Icon name="chevron-right" size={20}/></button>
                   </div>
                 </div>
 
                 {offEmployeesToday.length > 0 && (
                   <div className="bg-slate-100 border-b-4 border-slate-300 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 rounded-3xl print:hidden m-4">
                     <div className="flex items-center gap-2 text-slate-600 font-black text-lg whitespace-nowrap bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
-                      <Coffee size={24} className="text-amber-700" /> 🌴 休假/請假名單
+                      <Icon name="coffee" size={24} className="text-amber-700" /> 🌴 休假/請假名單
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {offEmployeesToday.map((e, i) => (
@@ -615,7 +603,7 @@
                               <td className="border-r-4 border-slate-300 font-mono font-black text-slate-400 bg-white">{infoStr}</td>
                               <td colSpan={timeSlots.length} className="text-center">
                                 <div className="flex items-center justify-center gap-3 w-full h-full py-1">
-                                  <Coffee size={20} className="text-slate-400" />
+                                  <Icon name="coffee" size={20} className="text-slate-400" />
                                   <span className="text-lg font-black text-slate-500 tracking-[0.5rem] bg-white/80 px-4 py-1 rounded-xl shadow-sm border border-slate-200">
                                     {{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[s.leaveType] || '休假'}
                                   </span>
@@ -646,15 +634,14 @@
                               
                               if (cellData && cellData.loc) {
                                 if (cellData.loc.includes('六甲')) bgColor = 'bg-green-500 print:bg-black';
-                                else if (cellData.loc.includes('麻豆')) bgColor = 'bg-purple-500 print:bg-black';
-                                else bgColor = 'bg-blue-500 print:bg-black';
+                                else if (cellData.loc.includes('麻豆')) bgColor = 'bg-madou-soft print:bg-black';
+                                else bgColor = 'bg-blue-400 print:bg-black';
                               }
 
                               return (
                                 <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
                                    {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[8px] text-white opacity-70 scale-75 origin-top-left ml-0.5 mt-0.5 font-black">代</span>}
                                    
-                                   {/* 甘特圖內的深藍浮動標籤 */}
                                    {cellData && cellData.isStart && (cellData.station || cellData.note) && (
                                       <div className="absolute left-1 top-1 z-30 flex flex-col gap-0.5 pointer-events-none w-max">
                                           {cellData.station && <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-black border border-white/50">{cellData.station}</span>}
@@ -688,7 +675,7 @@
                       <div key={day} onClick={() => { setDate(new Date(date.getFullYear(), date.getMonth(), day)); setView('daily'); }} className="h-[120px] md:h-[150px] lg:h-[160px] p-2 md:p-3 border-r border-b hover:bg-orange-50/40 cursor-pointer relative group flex flex-col">
                         <div className="flex justify-between items-start mb-1 shrink-0">
                           <span className="text-lg md:text-xl font-sans font-black">{day}</span>
-                          {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEEvent({ day, text: ev?.text || "" }); }} className="p-1 text-slate-200 group-hover:text-orange-500 no-print"><Tag size={16}/></button>}
+                          {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEEvent({ day, text: ev?.text || "" }); }} className="p-1 text-slate-200 group-hover:text-orange-500 no-print"><Icon name="tag" size={16}/></button>}
                         </div>
                         <div className="flex-1 overflow-y-auto calendar-cell-scroll pr-1">{renderEvents(ev?.text)}</div>
                       </div>
@@ -705,17 +692,17 @@
             {mBackup && (
               <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[6000] p-6 font-black font-sans">
                 <div className="bg-white rounded-[3rem] w-full max-w-2xl p-10 shadow-2xl animate-in zoom-in-95">
-                  <div className="flex justify-between items-center mb-8"><h3 className="text-3xl"><Shield className="inline mr-2 text-blue-600"/>備份與還原</h3><button onClick={() => setMBackup(false)} className="p-3 bg-slate-100 rounded-full"><X/></button></div>
+                  <div className="flex justify-between items-center mb-8"><h3 className="text-3xl"><Icon name="shield" className="inline mr-2 text-blue-600"/>備份與還原</h3><button onClick={() => setMBackup(false)} className="p-3 bg-slate-100 rounded-full"><Icon name="x"/></button></div>
                   
                   <div className="bg-orange-50 p-8 rounded-2xl relative border-4 border-orange-100 mb-6">
                     <h4 className="text-2xl text-orange-800 mb-4">📥 第一步：讀取您的備份檔</h4>
                     <input type="file" accept=".json" ref={fileInputRef} onChange={handleUploadRestore} className="hidden" />
-                    <button onClick={() => fileInputRef.current.click()} className="w-full py-6 bg-orange-600 text-white rounded-xl text-2xl shadow-lg"><Upload className="inline mr-2"/>上傳備份檔案並還原</button>
+                    <button onClick={() => fileInputRef.current.click()} className="w-full py-6 bg-orange-600 text-white rounded-xl text-2xl shadow-lg"><Icon name="upload" className="inline mr-2"/>上傳備份檔案並還原</button>
                     <p className="text-center text-sm text-orange-800 mt-4">👉 點擊上方按鈕，選取您電腦裡的 .json 備份檔即可！</p>
                   </div>
                   
                   <div className="bg-slate-100 p-6 rounded-2xl">
-                    <button onClick={handleDownloadBackup} className="w-full py-4 bg-slate-800 text-white rounded-xl text-xl shadow-lg"><Download className="inline mr-2"/>下載備份 (.json)</button>
+                    <button onClick={handleDownloadBackup} className="w-full py-4 bg-slate-800 text-white rounded-xl text-xl shadow-lg"><Icon name="download" className="inline mr-2"/>下載備份 (.json)</button>
                   </div>
                 </div>
               </div>
@@ -725,7 +712,7 @@
             {mHR && (
               <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[5000] p-4 font-black font-sans">
                 <div className="bg-white rounded-3xl w-full max-w-7xl h-[85vh] flex flex-col shadow-2xl">
-                  <div className="bg-slate-900 p-6 text-white flex justify-between items-center"><h3 className="text-2xl"><Users2 className="inline mr-2"/>夥伴資料庫</h3><button onClick={() => setMHR(false)}><X/></button></div>
+                  <div className="bg-slate-900 p-6 text-white flex justify-between items-center"><h3 className="text-2xl"><Icon name="users-2" className="inline mr-2"/>夥伴資料庫</h3><button onClick={() => setMHR(false)}><Icon name="x"/></button></div>
                   <div className="flex-1 grid grid-cols-12 overflow-hidden">
                     <div className="col-span-4 p-8 bg-slate-50 border-r-4">
                       <input className="w-full border-2 p-3 mb-4 rounded-xl" placeholder="姓名" value={hrForm.name} onChange={e => setHrForm({...hrForm, name: e.target.value})} />
@@ -737,7 +724,7 @@
                       {fEmployees.map(e => (
                         <div key={e.id} className="p-5 border-2 rounded-2xl flex justify-between items-center shadow-sm">
                           <div><div className="text-xl font-black">{e.name} <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">{e.type}</span></div></div>
-                          <div className="flex gap-2"><button onClick={() => setHrForm({ id: e.id, name: e.name, type: e.type, role: e.role })} className="p-3 bg-blue-50 rounded-xl"><Edit3/></button><button onClick={() => { if(window.confirm('刪除?')) saveToCloudAndLocal('employee', e.id, null); }} className="p-3 bg-red-50 rounded-xl text-red-500"><Trash2/></button></div>
+                          <div className="flex gap-2"><button onClick={() => setHrForm({ id: e.id, name: e.name, type: e.type, role: e.role })} className="p-3 bg-blue-50 rounded-xl"><Icon name="edit-3"/></button><button onClick={() => { if(window.confirm('刪除?')) saveToCloudAndLocal('employee', e.id, null); }} className="p-3 bg-red-50 rounded-xl text-red-500"><Icon name="trash-2"/></button></div>
                         </div>
                       ))}
                     </div>
@@ -750,7 +737,7 @@
             {eShift && (
               <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-2xl flex items-center justify-center z-[5000] p-6 font-black font-sans">
                 <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
-                  <div className="bg-orange-600 p-6 text-white flex justify-between items-center"><h3 className="text-2xl"><Clock className="inline mr-2"/>排班 ({fEmployees.find(e=>e.id===eShift.empId)?.name})</h3><button onClick={() => setEShift(null)}><X/></button></div>
+                  <div className="bg-orange-600 p-6 text-white flex justify-between items-center"><h3 className="text-2xl"><Icon name="clock" className="inline mr-2"/>排班 ({fEmployees.find(e=>e.id===eShift.empId)?.name})</h3><button onClick={() => setEShift(null)}><Icon name="x"/></button></div>
                   <div className="p-8 overflow-y-auto space-y-6 flex-1 bg-slate-50">
                     <div className="grid grid-cols-4 gap-4">
                       {['work', 'off', 'annual', 'sick', 'schedule_off', 'madou_off', 'liujia_off'].map(id => (
@@ -807,7 +794,7 @@
             {eEvent && (
               <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[5500] p-6 font-black font-sans">
                 <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 border-4 border-white/20">
-                  <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)} className="text-slate-400 hover:text-black"><X/></button></div>
+                  <div className="flex justify-between items-center mb-4"><h3 className="text-2xl text-orange-600">記事設定</h3><button onClick={() => setEEvent(null)} className="text-slate-400 hover:text-black"><Icon name="x"/></button></div>
                   <textarea id="et-box" className="w-full border-4 p-4 rounded-xl h-48 text-xl outline-none focus:border-orange-500 bg-slate-50" defaultValue={eEvent.text} placeholder="例如：六甲店休" />
                   <button onClick={() => { const txt = document.getElementById('et-box').value; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day)); saveToCloudAndLocal('event', `event_${k}`, { key: k, text: txt.trim(), base }); setEEvent(null); triggerToast(); }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl shadow-lg active:scale-95 transition-all">💾 儲存事項</button>
                 </div>
@@ -818,7 +805,7 @@
       );
     }
 
-    const root = createRoot(document.getElementById('root'));
+    const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
 </body>
