@@ -153,9 +153,9 @@
       const [shifts, setShifts] = useState(lsShifts);
       const [events, setEvents] = useState(lsEvents); 
       
-      const [view, setView] = useState('daily'); // 預設改為甘特圖
+      const [view, setView] = useState('daily');
       const [toast, setToast] = useState(false);
-      const [date, setDate] = useState(new Date(2026, 6, 25)); // 截圖日期
+      const [date, setDate] = useState(new Date(2026, 6, 25));
       
       const dateInputRef = useRef(null);
       const fileInputRef = useRef(null);
@@ -467,16 +467,16 @@
                             return (
                               <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} p-3 border border-slate-300 font-black text-black text-lg cursor-pointer align-middle relative`}>
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
-                                  <div key={idx} className="leading-tight mb-3 last:mb-0 flex flex-col items-center justify-center">
-                                    <span className={seg.subName ? "line-through opacity-60" : "mb-1"}>{seg.loc} {seg.start}-{seg.end}</span>
-                                    {/* 💡 崗位/備註：亮黃底 + 紅色粗框 + 黑色大字體 */}
+                                  <div key={idx} className="leading-tight mb-2 last:mb-0 flex flex-col items-center">
+                                    <span className={seg.subName ? "line-through opacity-60 mb-1" : "mb-1"}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {/* 💡 崗位/備註：白底 + 紅色邊框 + 紅色字體，確保不跟底色融為一體 */}
                                     {(seg.station || seg.note) && (
-                                        <div className="flex flex-col gap-1 mt-1">
-                                            {seg.station && <span className="bg-yellow-300 text-black border-2 border-red-600 px-2 py-0.5 rounded-md font-black text-sm leading-none shadow-sm">{seg.station}</span>}
-                                            {seg.note && <span className="bg-yellow-300 text-black border-2 border-red-600 px-2 py-0.5 rounded-md font-black text-sm leading-none shadow-sm">{seg.note}</span>}
+                                        <div className="flex flex-col gap-1 w-full items-center">
+                                            {seg.station && <span className="bg-white text-red-600 border-2 border-red-500 px-1.5 py-0.5 rounded font-black text-[12px] leading-none shadow-sm">{seg.station}</span>}
+                                            {seg.note && <span className="bg-white text-red-600 border-2 border-red-500 px-1.5 py-0.5 rounded font-black text-[11px] leading-none shadow-sm">{seg.note}</span>}
                                         </div>
                                     )}
-                                    {seg.subName && <span className="text-red-600 text-[12px] font-black mt-1 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">({seg.subName}代)</span>}
+                                    {seg.subName && <span className="text-[10px] mt-1 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</span>}
                                   </div>
                                 )) : content}
                               </td>
