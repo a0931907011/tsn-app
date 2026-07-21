@@ -97,10 +97,35 @@
       return { lsEmps, lsShifts, lsEvents };
     };
 
+    // 💡 新增：泰膳娘專屬 Logo 元件
+    const BrandLogo = ({ className }) => {
+      const [hasError, setHasError] = useState(false);
+      
+      // 如果圖片尚未上傳或讀取失敗，顯示預設的橘色方塊防呆
+      if (hasError) {
+        return (
+          <div className={`flex items-center justify-center bg-orange-600 text-white font-black shadow-lg text-center leading-tight ${className}`}>
+            Thai<br/>Food
+          </div>
+        );
+      }
+      
+      // 成功讀取時顯示 logo.jpg
+      return (
+        <img 
+          src="logo.jpg" 
+          alt="泰膳娘 Logo" 
+          className={`object-cover bg-white ${className}`} 
+          onError={() => setHasError(true)} 
+        />
+      );
+    };
+
     function App() {
       const [user, setUser] = useState(null);
       const [role, setRole] = useState('none'); 
       const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+      const [dialog, setDialog] = useState({ isOpen: false, message: '' });
 
       useEffect(() => {
         const init = async () => {
@@ -117,14 +142,18 @@
         const pwd = document.getElementById('pwd-input').value;
         if (pwd === PWD_ADMIN) setRole('admin');
         else if (pwd === PWD_STAFF) setRole('partner');
-        else alert("密碼錯誤！");
+        else setDialog({ isOpen: true, message: '密碼錯誤！請重新輸入' });
         setIsLoadingAuth(false);
       };
 
       if (role === 'none') return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans">
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans relative">
           <div className="bg-white rounded-[3rem] p-12 w-full max-w-md text-center shadow-2xl animate-in zoom-in-95 border-4 border-white/10">
-            <Lock className="mx-auto text-orange-600 mb-6" size={64} />
+            {/* 💡 替換點 1：登入畫面的超大 Logo */}
+            <div className="flex justify-center mb-6">
+               <BrandLogo className="w-32 h-32 rounded-[2rem] shadow-xl border-4 border-slate-50" />
+            </div>
+            
             <h1 className="text-3xl font-black mb-8 text-slate-800">泰膳娘系統入口</h1>
             <input 
               id="pwd-input" type="password" autoFocus placeholder="請輸入通行密碼"
@@ -139,6 +168,17 @@
               🚀 {isLoadingAuth ? '驗證中...' : '登入系統'}
             </button>
           </div>
+
+          {/* 自訂 Alert 視窗 */}
+          {dialog.isOpen && (
+             <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-black">
+                <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in-95">
+                   <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
+                   <p className="text-2xl mb-8 text-slate-800">{dialog.message}</p>
+                   <button onClick={() => setDialog({ isOpen: false, message: '' })} className="w-full py-4 bg-orange-600 text-white rounded-xl shadow-lg text-xl active:scale-95">我知道了</button>
+                </div>
+             </div>
+          )}
         </div>
       );
 
@@ -156,6 +196,7 @@
       const [view, setView] = useState('daily');
       const [toast, setToast] = useState(false);
       const [date, setDate] = useState(new Date(2026, 6, 25));
+      const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', message: '', onConfirm: null });
       
       const dateInputRef = useRef(null);
       const fileInputRef = useRef(null);
@@ -165,7 +206,6 @@
       const [mHR, setMHR] = useState(false);
       const [hrForm, setHrForm] = useState({ id: null, name: '', type: '月薪', role: '主廚' }); 
       const [mBackup, setMBackup] = useState(false);
-      const [showPrintModal, setShowPrintModal] = useState(false);
 
       const [locFilter, setLocFilter] = useState('全部');
       const [nameFilter, setNameFilter] = useState(''); 
@@ -197,6 +237,9 @@
 
       const triggerToast = () => { setToast(true); setTimeout(() => setToast(false), 2000); };
       const handlePrint = () => { window.print(); };
+      
+      const showAlert = (message) => setDialog({ isOpen: true, type: 'alert', message, onConfirm: null });
+      const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', message, onConfirm });
 
       const handleExportExcel = () => {
         let csv = '\uFEFF日期,星期,姓名,崗位,出勤狀態,地點段一,時間段一,地點段二,時間段二,地點段三,時間段三\n';
@@ -324,15 +367,15 @@
               const parts = res.shifts[0].key.split('_');
               if (parts.length === 3) setDate(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
             }
-            alert("✅ 備份檔已成功匯入！");
-          } catch (err) { alert("❌ 檔案讀取失敗，請確認檔案格式"); }
+            showAlert("✅ 備份檔已成功匯入！");
+          } catch (err) { showAlert("❌ 檔案讀取失敗，請確認檔案格式"); }
           event.target.value = null;
         };
         reader.readAsText(file);
       };
 
       return (
-        <div className="min-h-screen bg-slate-100 print:bg-white flex flex-col font-sans font-bold text-slate-800 select-none">
+        <div className="h-screen overflow-hidden bg-slate-100 print:bg-white print:h-auto print:overflow-visible flex flex-col font-sans font-bold text-slate-800 select-none">
           
           <datalist id="station-options">
             <option value="內場" />
@@ -351,9 +394,10 @@
 
           {toast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] bg-slate-800 text-white px-8 py-4 rounded-full flex items-center gap-3 shadow-2xl animate-in slide-in-from-top-4 print:hidden"><CheckCircle2 className="text-green-400" size={24} /> <span className="font-black tracking-widest text-lg">資料儲存成功</span></div>}
 
-          <nav className="w-full bg-white p-4 shadow-xl flex flex-col lg:flex-row justify-between items-center sticky top-0 z-40 border-b-2 print:hidden">
+          <nav className="shrink-0 w-full bg-white p-4 shadow-xl flex flex-col lg:flex-row justify-between items-center z-40 border-b-2 print:hidden">
             <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-2xl text-white shadow-lg ${isAdmin ? 'bg-orange-600 shadow-orange-200' : 'bg-slate-800'}`}>{isAdmin ? <ShieldCheck size={32}/> : <UserCheck size={32}/>}</div>
+              {/* 💡 替換點 2：導航列左上角小 Logo */}
+              <BrandLogo className="w-14 h-14 rounded-2xl shadow-md border border-slate-100 shrink-0" />
               <div><h1 className="text-2xl font-black tracking-tighter">泰膳娘系統 <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded align-middle">電大字版</span></h1></div>
             </div>
             
@@ -384,11 +428,11 @@
             </div>
           </nav>
 
-          <main className="flex-1 w-full mx-auto print:p-0 print:m-0 font-black bg-white">
+          <main className="flex-1 w-full mx-auto print:p-0 print:m-0 font-black bg-white flex flex-col min-h-0">
             
             {/* 視圖 1: 員工週總表 */}
             {view === 'employee_matrix' && (
-              <div className="w-full flex flex-col">
+              <div className="w-full flex flex-col flex-1 min-h-0">
                 <div className="flex justify-between items-center px-6 py-4 border-b bg-slate-50 print:hidden shrink-0">
                   <div className="text-2xl font-black text-slate-800 flex items-center gap-2"><Calendar size={32} className="text-orange-600"/> 員工排班週總表</div>
                   <div className="flex items-center gap-3">
@@ -403,9 +447,13 @@
                   </div>
                 </div>
                 
-                <div className="overflow-auto w-full">
+                <div className="hidden print:block text-center py-2 bg-white mb-2 shrink-0">
+                   <h2 className="text-xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
+                </div>
+                
+                <div className="overflow-auto w-full flex-1 print:overflow-visible">
                   <table className="w-full text-center border-collapse gantt-table table-fixed min-w-[1400px]">
-                    <thead className="sticky top-0 z-20 shadow-sm bg-slate-200">
+                    <thead className="sticky top-0 z-20 shadow-md bg-slate-200">
                       <tr>
                         <th className="py-4 px-2 w-32 text-black text-lg">姓名</th>
                         <th className="py-4 px-2 w-32 text-black text-lg">崗位</th>
@@ -430,7 +478,7 @@
                             const s = getShiftObj(emp.id, d);
                             let bgColor = "bg-white", content = "", segments = [];
                             
-                            if (!s) bgColor = "bg-transparent";
+                            if (!s) bgColor = "bg-transparent hover:bg-slate-100";
                             else if (s.leaveType === 'work') {
                               [1, 2, 3].forEach(n => {
                                 const loc = String(s[`shift${n}Loc`] || ''); 
@@ -452,7 +500,7 @@
                                 if (firstLoc.includes('麻豆')) { bgColor = "bg-[#e9d5ff]"; } // 淡粉紫
                                 else if (firstLoc.includes('六甲')) { bgColor = "bg-[#bbf7d0]"; } // 淡粉綠
                                 else { bgColor = "bg-blue-200"; }
-                              } else bgColor = "bg-transparent"; 
+                              } else bgColor = "bg-transparent hover:bg-slate-100"; 
                             } else {
                               if (s.leaveType === 'off') { bgColor = "bg-yellow-400"; content = "休假"; }
                               else if (s.leaveType === 'schedule_off') { bgColor = "bg-yellow-400"; content = "排休"; }
@@ -467,16 +515,16 @@
                             return (
                               <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} p-3 border border-slate-300 font-black text-black text-lg cursor-pointer align-middle relative`}>
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
-                                  <div key={idx} className="leading-tight mb-2 last:mb-0 flex flex-col items-center">
-                                    <span className={seg.subName ? "line-through opacity-60 mb-1" : "mb-1"}>{seg.loc} {seg.start}-{seg.end}</span>
-                                    {/* 💡 崗位/備註：白底 + 紅色邊框 + 紅色字體，確保不跟底色融為一體 */}
+                                  <div key={idx} className="leading-tight mb-3 last:mb-0 flex flex-col items-center justify-center">
+                                    <span className={seg.subName ? "line-through opacity-60" : "mb-1"}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {/* 崗位/備註徽章：黃底紅框黑字 */}
                                     {(seg.station || seg.note) && (
-                                        <div className="flex flex-col gap-1 w-full items-center">
-                                            {seg.station && <span className="bg-white text-red-600 border-2 border-red-500 px-1.5 py-0.5 rounded font-black text-[12px] leading-none shadow-sm">{seg.station}</span>}
-                                            {seg.note && <span className="bg-white text-red-600 border-2 border-red-500 px-1.5 py-0.5 rounded font-black text-[11px] leading-none shadow-sm">{seg.note}</span>}
+                                        <div className="flex flex-col gap-1 mt-1">
+                                            {seg.station && <span className="bg-yellow-300 text-black border-2 border-red-600 px-2 py-0.5 rounded-md font-black text-sm leading-none shadow-sm">{seg.station}</span>}
+                                            {seg.note && <span className="bg-yellow-300 text-black border-2 border-red-600 px-2 py-0.5 rounded-md font-black text-sm leading-none shadow-sm">{seg.note}</span>}
                                         </div>
                                     )}
-                                    {seg.subName && <span className="text-[10px] mt-1 text-red-600 bg-white/90 px-1 rounded inline-block shadow-sm font-black">({seg.subName}代)</span>}
+                                    {seg.subName && <span className="text-red-600 text-[12px] font-black mt-1 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">({seg.subName}代)</span>}
                                   </div>
                                 )) : content}
                               </td>
@@ -492,7 +540,7 @@
 
             {/* 視圖 2: 時間甘特圖 */}
             {view === 'daily' && (
-              <div className="w-full flex flex-col">
+              <div className="w-full flex flex-col flex-1 min-h-0">
                 <div className="flex flex-wrap justify-between items-center px-6 py-3 border-b bg-slate-50 print:bg-white print:hidden shrink-0 gap-4">
                   <h2 className="text-3xl font-black flex flex-wrap items-center gap-3 text-black">
                     {date.getFullYear()}年{date.getMonth()+1}月{date.getDate()}日 (星期{['日','一','二','三','四','五','六'][date.getDay()]}) 排班時間表
@@ -517,7 +565,6 @@
                   </div>
                 </div>
 
-                {/* 💡 縮小休假名單的外距與內距 */}
                 {offEmployeesToday.length > 0 && (
                   <div className="bg-yellow-50 border-4 border-yellow-200 px-4 py-3 flex flex-wrap items-center gap-4 shrink-0 rounded-3xl print:hidden mx-4 mt-3 mb-1">
                     <div className="flex items-center gap-2 text-yellow-800 font-black text-xl whitespace-nowrap bg-white px-5 py-2 rounded-2xl shadow-sm border-2 border-yellow-200">
@@ -536,8 +583,7 @@
                   </div>
                 )}
                 
-                {/* 💡 縮小表格頂部的間距 */}
-                <div className="overflow-auto flex-1 w-full px-4 pb-4 pt-1 print:p-0">
+                <div className="overflow-auto flex-1 w-full px-4 pb-4 pt-1 print:p-0 print:overflow-visible">
                   <table className="w-full text-center border-collapse gantt-table table-fixed min-w-[2000px] print:min-w-full relative">
                     <thead className="sticky top-0 z-30 shadow-md">
                       <tr className="bg-slate-900 text-white print:bg-gray-200 print:text-black">
@@ -641,7 +687,7 @@
                                     <div key={idx} className="leading-tight flex flex-col items-center">
                                       <span className={`text-xl font-black text-black ${seg.subName ? "text-red-600 line-through" : ""}`}>{seg.loc} {seg.start}-{seg.end}</span>
                                       
-                                      {/* 💡 左側文字崗位/備註：亮黃底 + 紅色粗框 + 黑色大字體 */}
+                                      {/* 左側文字崗位/備註：亮黃底 + 紅色粗框 + 黑色大字體 */}
                                       {(seg.station || seg.note) && (
                                           <div className="flex flex-col gap-1 mt-1">
                                               {seg.station && <span className="bg-yellow-300 text-black border-[3px] border-red-600 px-3 py-1 rounded-lg font-black text-xl shadow-md">{seg.station}</span>}
@@ -666,10 +712,9 @@
                               }
 
                               return (
-                                // 💡 關鍵修復：這裡加上了 relative，防止字體飄移！
                                 <td key={i} className={`${bgColor} relative p-0 ${slot.val % 1 === 0 ? 'border-l-2 border-slate-300' : 'border-l border-slate-200/50'}`}>
                                    
-                                   {/* 💡 時間軸內字體極限放大，並加上黑色立體陰影 */}
+                                   {/* 時間軸內字體與陰影 */}
                                    {cellData && cellData.isStart && (
                                       <div className="absolute inset-y-0 left-0 w-max z-20 flex flex-col justify-center pl-3 pr-8 pointer-events-none">
                                           <span className="text-[28px] font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] tracking-widest">{cellData.loc}</span>
@@ -696,7 +741,7 @@
 
             {/* 視圖 3: 營運月曆 */}
             {view === 'monthly' && (
-              <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
+              <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden flex flex-col flex-1 min-h-0 print:h-auto">
                 <div className="grid grid-cols-7 bg-slate-800 print:bg-slate-200 text-white print:text-black text-xs tracking-widest text-center py-4 uppercase shrink-0 sticky top-0 z-20 shadow-md">
                   {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(d => <div key={d}>{d}</div>)}
                 </div>
@@ -720,7 +765,6 @@
             )}
           </main>
 
-          {/* 彈窗模組 */}
           <div className="print:hidden">
             {/* 上傳還原模組 */}
             {mBackup && (
@@ -758,7 +802,7 @@
                       {fEmployees.map(e => (
                         <div key={e.id} className="p-5 border-2 rounded-2xl flex justify-between items-center shadow-sm">
                           <div><div className="text-xl font-black">{e.name} <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">{e.type}</span></div></div>
-                          <div className="flex gap-2"><button onClick={() => setHrForm({ id: e.id, name: e.name, type: e.type, role: e.role })} className="p-3 bg-blue-50 rounded-xl"><Edit3/></button><button onClick={() => { if(window.confirm('刪除?')) saveToCloudAndLocal('employee', e.id, null); }} className="p-3 bg-red-50 rounded-xl text-red-500"><Trash2/></button></div>
+                          <div className="flex gap-2"><button onClick={() => setHrForm({ id: e.id, name: e.name, type: e.type, role: e.role })} className="p-3 bg-blue-50 rounded-xl"><Edit3/></button><button onClick={() => showConfirm(`確定要刪除 ${e.name} 嗎？`, () => saveToCloudAndLocal('employee', e.id, null))} className="p-3 bg-red-50 rounded-xl text-red-500"><Trash2/></button></div>
                         </div>
                       ))}
                     </div>
@@ -767,7 +811,7 @@
               </div>
             )}
 
-            {/* 💡 排班編輯 (5格：據點、上班、下班、崗位、備註) */}
+            {/* 排班編輯 */}
             {eShift && (
               <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-2xl flex items-center justify-center z-[5000] p-6 font-black font-sans">
                 <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
@@ -833,6 +877,25 @@
                   <button onClick={() => { const txt = document.getElementById('et-box').value; const k = getDayKey(new Date(date.getFullYear(), date.getMonth(), eEvent.day)); saveToCloudAndLocal('event', `event_${k}`, { key: k, text: txt.trim(), base }); setEEvent(null); triggerToast(); }} className="w-full py-4 mt-4 bg-orange-600 text-white rounded-xl text-xl shadow-lg active:scale-95 transition-all">💾 儲存事項</button>
                 </div>
               </div>
+            )}
+            
+            {/* 系統共用 Alert / Confirm */}
+            {dialog.isOpen && (
+               <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 font-black">
+                  <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in-95">
+                     {dialog.type === 'alert' ? <AlertCircle className="mx-auto text-orange-500 mb-4" size={48} /> : <AlertCircle className="mx-auto text-blue-500 mb-4" size={48} />}
+                     <p className="text-2xl mb-8 text-slate-800">{dialog.message}</p>
+                     <div className="flex justify-center gap-4">
+                        {dialog.type === 'confirm' && (
+                           <button onClick={() => setDialog({ ...dialog, isOpen: false })} className="flex-1 py-4 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 text-xl">取消</button>
+                        )}
+                        <button onClick={() => {
+                           if (dialog.onConfirm) dialog.onConfirm();
+                           setDialog({ ...dialog, isOpen: false });
+                        }} className="flex-1 py-4 bg-orange-600 text-white rounded-xl shadow-lg text-xl active:scale-95">確定</button>
+                     </div>
+                  </div>
+               </div>
             )}
           </div>
         </div>
