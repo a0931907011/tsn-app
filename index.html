@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>泰膳娘智慧排班系統 - GitHub版</title>
+  <title>泰膳娘智慧排班系統 - 截圖特化版</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- 💡 全螢幕錯誤偵測器 -->
   <script>
     window.addEventListener('error', function(event) {
       const root = document.getElementById('root');
@@ -45,14 +46,14 @@
       ::-webkit-scrollbar { display: none !important; }
       .no-print { display: none !important; }
     }
-    .gantt-table th, .gantt-table td { border: 1px solid #e5e7eb; }
+    .gantt-table th, .gantt-table td { border: 1px solid #d1d5db; }
     .bg-stripes { background-image: repeating-linear-gradient(45deg, #f8fafc 0, #f8fafc 10px, #f1f5f9 10px, #f1f5f9 20px); }
     .calendar-cell-scroll::-webkit-scrollbar { width: 4px; }
     .calendar-cell-scroll::-webkit-scrollbar-track { background: transparent; }
     .calendar-cell-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="bg-slate-100 text-slate-950">
   
   <div id="root">
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0f172a; color:white; font-family:sans-serif;">
@@ -169,9 +170,11 @@
       const [shifts, setShifts] = useState(lsShifts);
       const [events, setEvents] = useState(lsEvents); 
       
-      const [view, setView] = useState('employee_matrix'); 
+      // 💡 修改：預設載入進入「時間甘特圖」daily 視圖
+      const [view, setView] = useState('daily'); 
       const [toast, setToast] = useState(false);
-      const [date, setDate] = useState(new Date(2026, 5, 16)); 
+      // 💡 將預設日期設為 7/25 方便您直接預覽
+      const [date, setDate] = useState(new Date(2026, 6, 25)); 
       
       const dateInputRef = useRef(null);
       const fileInputRef = useRef(null);
@@ -188,7 +191,6 @@
 
       useEffect(() => { if (!isAdmin && locFilter === '全部') setLocFilter('麻豆'); }, [isAdmin, locFilter]);
 
-      // --- 💾 雲端與本地端混和同步 ---
       useEffect(() => {
         if (!user) return; 
         const p = (n) => collection(db, 'artifacts', appId, 'public', 'data', n);
@@ -263,11 +265,11 @@
         if (!txt) return null;
         return String(txt).split(/[;；]/).map((str, idx) => {
           const t = str.trim(); if (!t) return null;
-          if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[15px] md:text-[16px] print:text-[12px] text-red-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[15px] md:text-[16px] print:text-[12px] text-green-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[15px] md:text-[16px] print:text-[12px] text-purple-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[15px] md:text-[16px] print:text-[12px] text-orange-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
-          return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[14px] md:text-[15px] print:text-[11px] bg-yellow-200 text-black print:bg-transparent border border-yellow-300 px-1.5 md:px-2 print:px-0 py-0.5 md:py-1 print:py-0 rounded-md mb-1 md:mb-1.5 print:mb-0.5 font-black print:leading-tight">• {String(t)}</div>;
+          if (t.includes("麻豆+六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-red-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
+          if (t.includes("六甲店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-green-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
+          if (t.includes("麻豆店休")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-purple-600 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
+          if (t.includes("新光空班")) return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[13px] md:text-[15px] print:text-[11px] text-orange-500 font-black mb-1 md:mb-1.5 print:mb-0.5 tracking-wide bg-white/50 print:bg-transparent px-1 rounded">** {String(t)}</div>;
+          return <div key={idx} className="truncate print:whitespace-normal print:break-words text-[12px] md:text-[14px] print:text-[10px] bg-yellow-100 text-slate-800 print:bg-transparent border border-yellow-200 px-1.5 md:px-2 print:px-0 py-0.5 md:py-1 print:py-0 rounded-md mb-1 md:mb-1.5 print:mb-0.5 font-bold print:leading-tight">• {String(t)}</div>;
         });
       };
 
@@ -402,6 +404,8 @@
           </nav>
 
           <main className="flex-1 w-full max-w-[2400px] mx-auto p-4 md:p-6 print:p-0 print:m-0 font-black">
+            
+            {/* 視圖 1: 員工週總表 */}
             {view === 'employee_matrix' && (
               <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b bg-slate-50 print:hidden shrink-0 gap-4">
@@ -418,19 +422,18 @@
                   </div>
                 </div>
                 <div className="hidden print:block text-center py-2 bg-white mb-2 shrink-0">
-                   <h2 className="text-2xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
+                   <h2 className="text-xl font-black">泰膳娘 員工排班週總表 ({weekDates[0].getMonth()+1}/{weekDates[0].getDate()} ~ {weekDates[6].getMonth()+1}/{weekDates[6].getDate()})</h2>
                 </div>
                 <div className="overflow-auto flex-1 print:overflow-visible">
-                  <table className="w-full text-center border-collapse text-[16px] md:text-[18px] print:text-[12px] gantt-table relative min-w-[1000px]">
-                    <thead className="sticky top-0 z-20 shadow-md">
-                      {/* 💡 表頭字體加大加黑 */}
-                      <tr className="bg-slate-200 print:bg-gray-200 border-b-2 border-slate-300">
-                        <th className="py-5 px-3 w-28 bg-slate-200 print:bg-gray-200 font-black text-slate-900 text-xl md:text-2xl">姓名</th>
-                        <th className="py-5 px-3 w-28 bg-slate-200 print:bg-gray-200 font-black text-slate-900 text-xl md:text-2xl">崗位</th>
+                  <table className="w-full text-center border-collapse gantt-table relative min-w-[800px]">
+                    <thead className="sticky top-0 z-20 shadow-sm">
+                      <tr className="bg-slate-100 print:bg-gray-100">
+                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100 font-black text-slate-900 text-xl">姓名</th>
+                        <th className="py-4 px-2 w-24 bg-slate-100 print:bg-gray-100 font-black text-slate-900 text-xl">崗位</th>
                         {weekDates.map((d, i) => (
-                          <th key={i} className="py-5 px-2 min-w-[150px] bg-slate-200 print:bg-gray-200 border-l border-white print:border-gray-400">
-                            <div className="text-slate-900 print:text-black font-black text-2xl md:text-3xl tracking-wide">{d.getDate()}</div>
-                            <div className="text-base md:text-lg text-slate-800 font-black mt-1">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
+                          <th key={i} className="py-4 px-2 min-w-[120px] bg-slate-100 print:bg-gray-100 border-l border-white print:border-gray-300">
+                            <div className="text-slate-900 font-black text-2xl">{d.getDate()}</div>
+                            <div className="text-lg text-slate-900 font-black">星期{['日','一','二','三','四','五','六'][d.getDay()]}</div>
                           </th>
                         ))}
                       </tr>
@@ -441,10 +444,9 @@
                         if (locFilter === '全部') return true;
                         return weekDates.some(d => hasValidShiftAtLocation(getShiftObj(emp.id, d), locFilter));
                       }).map(emp => (
-                        <tr key={emp.id} className="hover:bg-slate-100 transition-colors group">
-                          {/* 💡 姓名與崗位字體極大化、純黑字體 */}
-                          <td className="py-6 px-3 font-black bg-slate-50 print:bg-transparent text-black text-2xl tracking-wide border-b border-slate-200">{emp.name}</td>
-                          <td className="py-6 px-3 text-slate-900 font-black bg-slate-50 print:bg-transparent text-lg md:text-xl border-b border-slate-200">{emp.role}</td>
+                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="py-5 px-2 font-black bg-slate-50 print:bg-transparent text-black text-2xl">{emp.name}</td>
+                          <td className="py-5 px-2 text-slate-900 font-black bg-slate-50 print:bg-transparent text-xl">{emp.role}</td>
                           {weekDates.map((d, i) => {
                             const s = getShiftObj(emp.id, d);
                             let bgColor = "bg-white", textColor = "text-black", content = "", segments = [];
@@ -467,34 +469,30 @@
                               });
                               if (segments.length > 0) {
                                 const firstLoc = segments[0].loc;
-                                // 💡 背景改為柔和淺色，文字改為極致深黑
-                                if (firstLoc.includes('麻豆')) { bgColor = "bg-purple-200"; textColor = "text-purple-950"; }
-                                else if (firstLoc.includes('六甲')) { bgColor = "bg-green-200"; textColor = "text-green-950"; }
-                                else { bgColor = "bg-blue-200"; textColor = "text-blue-950"; }
+                                if (firstLoc.includes('麻豆')) { bgColor = "bg-[#f3e8ff]"; textColor = "text-black"; }
+                                else if (firstLoc.includes('六甲')) { bgColor = "bg-[#dcfce7]"; textColor = "text-black"; }
+                                else { bgColor = "bg-blue-200"; textColor = "text-black"; }
                               } else bgColor = "bg-transparent hover:bg-slate-100"; 
                             } else {
-                              if (s.leaveType === 'off') { bgColor = "bg-yellow-200"; textColor = "text-yellow-950"; content = "休假"; }
-                              else if (s.leaveType === 'schedule_off') { bgColor = "bg-yellow-400"; textColor = "text-slate-900"; content = "排休"; }
-                              else if (s.leaveType === 'madou_off') { bgColor = "bg-purple-300"; textColor = "text-purple-950"; content = "麻豆店休"; }
-                              else if (s.leaveType === 'liujia_off') { bgColor = "bg-green-300"; textColor = "text-green-950"; content = "六甲店休"; }
-                              else if (s.leaveType === 'annual') { bgColor = "bg-emerald-300"; textColor = "text-emerald-950"; content = "特休"; }
-                              else if (s.leaveType === 'sick') { bgColor = "bg-red-300"; textColor = "text-red-950"; content = "病假"; }
-                              else if (s.leaveType === 'personal') { bgColor = "bg-orange-300"; textColor = "text-orange-950"; content = "事假"; }
+                              if (s.leaveType === 'off') { bgColor = "bg-[#facc15]"; textColor = "text-[#422006]"; content = "休假"; }
+                              else if (s.leaveType === 'schedule_off') { bgColor = "bg-[#facc15]"; textColor = "text-[#422006]"; content = "排休"; }
+                              else if (s.leaveType === 'madou_off') { bgColor = "bg-[#d8b4fe]"; textColor = "text-[#4c1d95]"; content = "麻豆店休"; }
+                              else if (s.leaveType === 'liujia_off') { bgColor = "bg-[#86efac]"; textColor = "text-[#14532d]"; content = "六甲店休"; }
+                              else if (s.leaveType === 'annual') { bgColor = "bg-[#4ade80]"; textColor = "text-[#064e3b]"; content = "特休"; }
+                              else if (s.leaveType === 'sick') { bgColor = "bg-[#f87171]"; textColor = "text-[#450a0a]"; content = "病假"; }
+                              else if (s.leaveType === 'personal') { bgColor = "bg-[#fb923c]"; textColor = "text-[#431407]"; content = "事假"; }
                               if ((s.leaveType === 'madou_off' && locFilter === '六甲') || (s.leaveType === 'liujia_off' && locFilter === '麻豆')) { bgColor = "bg-transparent hover:bg-slate-100"; content = ""; }
                             }
                             return (
-                              <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} ${textColor} p-3 border-b border-r border-slate-200 print:border-black font-black cursor-pointer whitespace-pre-line leading-relaxed relative`}>
+                              <td key={i} onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(d), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })} className={`${bgColor} ${textColor} p-3 border-2 font-black cursor-pointer print:border-black whitespace-pre-line leading-relaxed relative text-center align-middle`}>
                                 {s && s.leaveType === 'work' ? segments.map((seg, idx) => (
-                                  <div key={idx} className="mb-4 last:mb-0">
-                                    {/* 💡 排班時間字體大幅放大、加黑 */}
-                                    <span className={seg.subName ? "line-through opacity-80 text-xl" : "text-[22px] md:text-[24px] font-black tracking-widest block"}>
-                                      {seg.loc} {seg.start}-{seg.end}
-                                    </span>
-                                    {seg.station && <div className="text-blue-950 font-black mt-1.5 text-[16px] md:text-[18px]">{seg.station}</div>}
-                                    {seg.note && <div className="text-slate-900 font-black mt-1 text-[14px] md:text-[16px]">({seg.note})</div>}
-                                    {seg.subName && <div className="text-[14px] mt-1.5 text-red-700 bg-white/90 px-2 py-0.5 rounded-md inline-block shadow-sm font-black border border-red-200">({seg.subName}代)</div>}
+                                  <div key={idx} className="mb-3 last:mb-0">
+                                    <span className={seg.subName ? "line-through opacity-60 text-2xl" : "text-2xl tracking-wide font-black"}>{seg.loc} {seg.start}-{seg.end}</span>
+                                    {seg.station && <div className="mt-2 inline-block border-[3px] border-red-600 bg-yellow-300 text-black text-xl px-2 py-1 shadow-md font-black">{seg.station}</div>}
+                                    {seg.note && <div className="mt-2 inline-block border-[3px] border-red-600 bg-yellow-300 text-black text-xl px-2 py-1 shadow-md font-black">({seg.note})</div>}
+                                    {seg.subName && <div className="text-xl mt-1.5 text-red-700 bg-white/90 px-1.5 rounded inline-block shadow-sm font-black border border-red-200">({seg.subName}代)</div>}
                                   </div>
-                                )) : <span className="text-[20px] md:text-[22px] font-black tracking-widest">{content}</span>}
+                                )) : <span className="text-2xl font-black">{content}</span>}
                               </td>
                             );
                           })}
@@ -506,43 +504,47 @@
               </div>
             )}
 
-            {/* 視圖 2: 經典甘特圖 */}
             {view === 'daily' && (
-              <div className="bg-white rounded-3xl print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[75vh] md:max-h-[80vh] print:max-h-none">
-                <div className="flex justify-between items-center p-6 border-b bg-slate-50 print:bg-white print:p-2 shrink-0">
-                  <h2 className="text-2xl font-black flex flex-wrap items-center gap-3">
+              <div className="bg-white rounded-[3rem] print:rounded-none shadow-xl print:shadow-none border print:border-none border-slate-200 overflow-hidden print:overflow-visible flex flex-col max-h-[85vh] print:max-h-none">
+                
+                {/* Header 區塊 */}
+                <div className="flex justify-between items-center p-8 border-b bg-slate-50 print:bg-white print:p-2 shrink-0">
+                  <h2 className="text-4xl font-black flex flex-wrap items-center gap-4 text-slate-800 tracking-tight">
                     {date.getFullYear()}年{date.getMonth()+1}月{date.getDate()}日 (星期{['日','一','二','三','四','五','六'][date.getDay()]}) 排班時間表
                   </h2>
-                  <div className="flex items-center gap-2 no-print">
-                    <div className="relative mr-2">
-                      <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-40 pl-10" />
-                      <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                  <div className="flex items-center gap-3 no-print">
+                    <div className="relative mr-4">
+                      <input type="text" placeholder="輸入姓名..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} className="bg-white border-2 border-slate-300 text-slate-800 px-4 py-3 text-xl rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors w-48 pl-12" />
+                      <Search className="absolute left-4 top-4 text-slate-400" size={20} />
                     </div>
-                    <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors mr-2 cursor-pointer">
+                    <select value={locFilter} onChange={(e) => setLocFilter(e.target.value)} className="bg-white border-2 border-slate-300 text-slate-800 px-4 py-3 text-xl rounded-xl font-bold shadow-sm outline-none focus:border-orange-500 transition-colors mr-4 cursor-pointer">
                       {isAdmin && <option value="全部">全據點</option>}
                       <option value="麻豆">📍 麻豆</option><option value="六甲">📍 六甲</option><option value="茂迪">📍 茂迪</option><option value="餐車">🚚 餐車</option>
                     </select>
 
-                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><ChevronLeft size={20}/></button>
-                    <div className="flex items-center gap-2 bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2.5 rounded-xl shadow-inner transition-colors relative cursor-pointer">
-                      <Calendar size={20} className="pointer-events-none z-10" />
-                      <input type="date" ref={dateInputRef} className="bg-transparent outline-none cursor-pointer font-black text-orange-700 absolute inset-0 opacity-0 z-20 scale-150" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
-                      <span className="pointer-events-none z-10 font-black">選擇日期</span>
+                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1))} className="p-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors"><ChevronLeft size={24}/></button>
+                    
+                    <div className="flex items-center gap-2 bg-orange-100 hover:bg-orange-200 text-orange-800 px-6 py-3 rounded-xl shadow-inner transition-colors relative cursor-pointer border border-orange-200">
+                      <Calendar size={24} className="pointer-events-none z-10" />
+                      <input type="date" ref={dateInputRef} className="bg-transparent outline-none cursor-pointer font-black text-orange-800 absolute inset-0 opacity-0 z-20 scale-150" value={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`} onChange={(e) => { if(e.target.value) { const [y, m, d] = e.target.value.split('-'); setDate(new Date(y, m - 1, d)); } }} />
+                      <span className="pointer-events-none z-10 font-black text-xl tracking-widest">選擇日期</span>
                     </div>
-                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl transition-colors"><ChevronRight size={20}/></button>
+                    
+                    <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1))} className="p-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors"><ChevronRight size={24}/></button>
                   </div>
                 </div>
 
+                {/* 🌴 休假名單：極致放大 */}
                 {offEmployeesToday.length > 0 && (
-                  <div className="bg-slate-100 border-b-4 border-slate-300 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 rounded-3xl print:hidden m-4">
-                    <div className="flex items-center gap-2 text-slate-600 font-black text-lg whitespace-nowrap bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
-                      <Coffee size={24} className="text-amber-700" /> 🌴 休假/請假名單
+                  <div className="bg-yellow-50 border-[6px] border-yellow-300 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6 shrink-0 rounded-[2rem] print:hidden m-4 shadow-xl">
+                    <div className="flex items-center gap-3 text-yellow-800 font-black text-2xl whitespace-nowrap bg-white px-6 py-3 rounded-2xl shadow-md border-[3px] border-amber-600">
+                      <Coffee size={32} className="text-amber-700" /> 🌴 休假/請假名單
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-4">
                       {offEmployeesToday.map((e, i) => (
-                        <div key={i} className="bg-white border-2 border-slate-200 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:border-orange-300 transition-colors">
-                          <span className="font-black text-slate-800 text-md">{e.name}</span>
-                          <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-lg font-bold">
+                        <div key={i} className="bg-white border-[3px] border-slate-300 px-6 py-3 rounded-[1.5rem] shadow-lg flex items-center gap-3 hover:border-orange-400 transition-colors">
+                          <span className="font-black text-slate-900 text-2xl">{e.name}</span>
+                          <span className="text-lg bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl font-bold shadow-sm">
                             {{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[e.type] || '休假'}
                           </span>
                         </div>
@@ -551,24 +553,25 @@
                   </div>
                 )}
                 
+                {/* 甘特圖主體 */}
                 <div className="overflow-auto flex-1 print:overflow-visible p-4 print:p-0">
-                  <table className="w-full text-center border-collapse text-[12px] print:text-[10px] gantt-table table-fixed min-w-[1200px] print:min-w-full relative shadow-sm">
+                  <table className="w-full text-center border-collapse gantt-table table-fixed min-w-[2000px] print:min-w-full relative shadow-sm">
                     <thead className="sticky top-0 z-20 shadow-md">
                       <tr className="bg-slate-800 text-white print:bg-gray-200 print:text-black">
-                        <th className="w-16 py-1.5 bg-slate-800 print:bg-gray-200 text-sm">姓名</th>
-                        <th className="w-20 py-1.5 bg-slate-800 print:bg-gray-200 text-sm">崗位/地點</th>
-                        <th className="w-32 text-[10px] leading-tight border-r-4 border-slate-400 p-1.5 bg-slate-800 print:bg-gray-200 align-middle">
-                          <div className="text-slate-200 print:text-slate-800 mb-1">
-                            {date.getMonth()+1}/{date.getDate()}({['日','一','二','三','四','五','六'][date.getDay()]}) <span className="text-[8px] block opacity-80">(紅字為代班)</span>
+                        <th className="w-32 py-4 bg-slate-800 print:bg-gray-200 text-2xl font-black tracking-widest">姓名</th>
+                        <th className="w-40 py-4 bg-slate-800 print:bg-gray-200 text-2xl font-black tracking-widest">崗位/地點</th>
+                        <th className="w-64 text-xl leading-tight border-r-4 border-slate-400 p-2 bg-slate-800 print:bg-gray-200 align-middle">
+                          <div className="text-slate-200 print:text-slate-800 mb-2 font-black tracking-wider">
+                            {date.getMonth()+1}/{date.getDate()}({['日','一','二','三','四','五','六'][date.getDay()]})
                           </div>
                           {currentDailyEvent && currentDailyEvent.text && (
-                            <div className="text-[10px] text-red-700 bg-red-100 rounded border border-red-300 px-1 py-0.5 mx-1 shadow-sm leading-tight text-center font-bold truncate" title={currentDailyEvent.text}>
+                            <div className="text-lg text-red-700 bg-red-100 rounded-lg border-2 border-red-400 px-2 py-1 mx-2 shadow-md leading-tight text-center font-black truncate" title={currentDailyEvent.text}>
                               📌 {currentDailyEvent.text.replace(/[;；]/g, ' ')}
                             </div>
                           )}
                         </th>
                         {timeSlots.map((slot, i) => (
-                          <th key={i} className={`w-8 py-1.5 font-mono bg-slate-800 print:bg-gray-200 ${slot.val % 1 === 0 ? 'border-l border-white/30 print:border-black' : ''}`}>
+                          <th key={i} className={`w-14 py-3 font-mono font-black text-xl bg-slate-800 print:bg-gray-200 ${slot.val % 1 === 0 ? 'border-l-2 border-white/40 print:border-black' : ''}`}>
                             {slot.label}
                           </th>
                         ))}
@@ -627,14 +630,14 @@
 
                         if (isOff) {
                           return (
-                            <tr key={emp.id} className="cursor-pointer border-b bg-stripes opacity-90 hover:opacity-100 h-10" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
-                              <td className="py-2 font-black text-slate-400 bg-white text-sm">{emp.name}</td>
-                              <td className="text-slate-400 font-bold bg-white text-sm">{emp.role}</td>
-                              <td className="border-r-4 border-slate-300 font-mono font-black text-slate-400 bg-white">{infoStr}</td>
+                            <tr key={emp.id} className="cursor-pointer border-b-2 border-slate-200 bg-stripes opacity-90 hover:opacity-100 h-[100px]" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
+                              <td className="py-2 px-4 font-black text-slate-400 bg-white text-3xl">{emp.name}</td>
+                              <td className="text-slate-400 font-bold bg-white text-xl px-2">{emp.role}</td>
+                              <td className="border-r-4 border-slate-300 font-mono font-black text-slate-400 bg-white text-2xl">{infoStr}</td>
                               <td colSpan={timeSlots.length} className="text-center">
-                                <div className="flex items-center justify-center gap-3 w-full h-full py-1">
-                                  <Coffee size={20} className="text-slate-400" />
-                                  <span className="text-lg font-black text-slate-500 tracking-[0.5rem] bg-white/80 px-4 py-1 rounded-xl shadow-sm border border-slate-200">
+                                <div className="flex items-center justify-center gap-4 w-full h-full py-2">
+                                  <Coffee size={36} className="text-slate-400" />
+                                  <span className="text-3xl font-black text-slate-500 tracking-[0.5rem] bg-white/90 px-6 py-2 rounded-2xl shadow-md border border-slate-200">
                                     {{'off':'休假','schedule_off':'排休','madou_off':'麻豆店休','liujia_off':'六甲店休','annual':'特休','sick':'病假','personal':'事假'}[s.leaveType] || '休假'}
                                   </span>
                                 </div>
@@ -644,39 +647,40 @@
                         }
 
                         return (
-                          <tr key={emp.id} className="hover:bg-slate-50 cursor-pointer border-b h-10" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
-                            <td className="py-2 font-black text-sm">{emp.name}</td>
-                            <td className="text-slate-500 font-bold text-sm">{emp.role} {isWork && segments.length > 0 ? `(${segments[0].loc})` : ''}</td>
-                            <td className="border-r-4 border-slate-300 print:border-black font-mono">
+                          <tr key={emp.id} className="hover:bg-slate-50 cursor-pointer border-b-2 border-slate-200 h-[100px]" onClick={() => isAdmin && setEShift({ empId: emp.id, key: getDayKey(date), leaveType: s?.leaveType || 'work', shift1Loc: '麻豆', shift2Loc: '麻豆', shift3Loc: '麻豆', ...s })}>
+                            <td className="py-2 px-4 font-black text-slate-900 text-3xl tracking-widest">{emp.name}</td>
+                            <td className="text-slate-500 font-bold text-xl px-2">{emp.role} {isWork && segments.length > 0 ? `(${segments[0].loc})` : ''}</td>
+                            <td className="border-r-4 border-slate-300 print:border-black font-mono px-2 py-2">
                               {segments.length > 0 ? segments.map((seg, idx) => (
-                                <div key={idx} className="mb-1 last:mb-0 leading-tight">
-                                  <span className={seg.subName ? "text-red-600 line-through" : ""}>{seg.loc} {seg.start}-{seg.end}</span>
-                                  {seg.station && <div className="text-blue-800 font-black text-[11px] mt-0.5">{seg.station}</div>}
-                                  {seg.note && <div className="text-slate-700 font-black text-[10px] mt-0.5">({seg.note})</div>}
-                                  {seg.subName && <div className="text-red-600 text-[10px] font-black mt-0.5">由 {seg.subName} 代</div>}
+                                <div key={idx} className="mb-3 last:mb-0 leading-tight">
+                                  <span className={seg.subName ? "text-red-600 line-through text-2xl" : "text-xl font-black tracking-widest text-slate-900"}>{seg.loc} {seg.start}-{seg.end}</span>
+                                  {seg.station && <div className="mt-1.5 inline-block border-[3px] border-red-600 bg-yellow-300 text-black text-lg px-3 py-1 shadow-md font-black rounded-lg">{seg.station}</div>}
+                                  {seg.note && <div className="mt-1.5 inline-block border-[3px] border-red-600 bg-yellow-300 text-black text-lg px-3 py-1 shadow-md font-black rounded-lg ml-1">({seg.note})</div>}
+                                  {seg.subName && <div className="text-red-600 text-lg font-black mt-1.5 bg-red-50 px-2 py-1 rounded inline-block border border-red-200">由 {seg.subName} 代</div>}
                                 </div>
-                              )) : <span className="text-slate-400">{infoStr}</span>}
+                              )) : <span className="text-slate-400 text-2xl font-black">{infoStr}</span>}
                             </td>
                             {timeSlots.map((slot, i) => {
                               const cellData = slotLocations.get(slot.val);
                               const subName = slotSubs.get(slot.val);
                               let bgColor = '';
                               
+                              // 使用高飽和度色彩以凸顯白色陰影文字
                               if (cellData && cellData.loc) {
-                                if (cellData.loc.includes('六甲')) bgColor = 'bg-green-500 print:bg-black';
-                                else if (cellData.loc.includes('麻豆')) bgColor = 'bg-purple-500 print:bg-black';
+                                if (cellData.loc.includes('六甲')) bgColor = 'bg-[#22c55e] print:bg-black';
+                                else if (cellData.loc.includes('麻豆')) bgColor = 'bg-[#a855f7] print:bg-black';
                                 else bgColor = 'bg-blue-500 print:bg-black';
                               }
 
                               return (
-                                <td key={i} className={`${bgColor} relative ${slot.val % 1 === 0 ? 'border-l-2 border-slate-200 print:border-black' : 'border-l border-slate-100 print:border-gray-400'}`}>
-                                   {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[8px] text-white opacity-70 scale-75 origin-top-left ml-0.5 mt-0.5 font-black">代</span>}
+                                <td key={i} className={`${bgColor} overflow-visible ${slot.val % 1 === 0 ? 'border-l-2 border-slate-300 print:border-black' : 'border-l border-slate-200 print:border-gray-400'}`}>
+                                   {subName && slot.val % 1 === 0 && <span className="absolute left-0 top-0 text-[10px] text-white opacity-80 scale-75 origin-top-left ml-1 mt-1 font-black shadow-sm">代</span>}
                                    
-                                   {/* 甘特圖內的深藍浮動標籤 */}
-                                   {cellData && cellData.isStart && (cellData.station || cellData.note) && (
-                                      <div className="absolute left-1 top-1 z-30 flex flex-col gap-0.5 pointer-events-none w-max">
-                                          {cellData.station && <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-black border border-white/50">{cellData.station}</span>}
-                                          {cellData.note && <span className="bg-slate-700 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap font-bold border border-white/50">({cellData.note})</span>}
+                                   {/* 💡 霸氣佔滿時間軸的大文字 */}
+                                   {cellData && cellData.isStart && (cellData.station || cellData.loc || cellData.note) && (
+                                      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30 pointer-events-none whitespace-nowrap flex items-center gap-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                                          <span className="text-[36px] font-black text-white tracking-widest">{cellData.station || cellData.loc}</span>
+                                          {cellData.note && <span className="text-[24px] font-black text-yellow-300 bg-black/40 px-3 py-1 rounded-xl border border-black/50">({cellData.note})</span>}
                                       </div>
                                    )}
                                 </td>
